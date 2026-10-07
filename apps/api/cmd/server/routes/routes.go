@@ -19,11 +19,13 @@ func SetupRouter(meetingHandler *handler.MeetingHandler) *gin.Engine {
 		utils.Error(ctx, http.StatusMethodNotAllowed, "method not allowed")
 	})
 
-	api := engine.Group("/api/v1")
-	{
-		meetings := api.Group("/meetings")
-		{
-			meetings.POST("/", meetingHandler.CreateMeeting)
-		}
-	}
+	//api := engine.Group("/api/v1")
+	//{
+	//	meetings := api.Group("/meetings")
+	//	{
+	//		//meetings.POST("/")
+	//	}
+	//}
+
+	return engine
 }
