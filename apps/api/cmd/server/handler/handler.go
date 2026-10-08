@@ -154,6 +154,7 @@ func (handler *WebSocketHandler) handleJoin(client *websockets.Client) {
 
 	handler.hub.RegisterClient(client)
 
+	// Send personal join confirmation to the new participant
 	handler.hub.Send(
 		client,
 		websockets.Event{
@@ -163,6 +164,19 @@ func (handler *WebSocketHandler) handleJoin(client *websockets.Client) {
 				Name:          client.Name,
 			},
 		},
+	)
+
+	// Notify everyone else already in the meeting
+	handler.hub.Broadcast(
+		client.MeetingId,
+		websockets.Event{
+			Type: websockets.EventParticipantJoined,
+			Data: websockets.ParticipantData{
+				ParticipantId: client.Id,
+				Name:          client.Name,
+			},
+		},
+		client, // exclude the joiner themselves
 	)
 
 	client.ReadPump()

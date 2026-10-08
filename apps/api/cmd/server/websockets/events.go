@@ -3,9 +3,10 @@ package websockets
 type EventType string
 
 const (
-	EventMeetingJoin  EventType = "meeting.join"
-	EventMeetingJoined EventType = "meeting.joined"
-	EventMeetingLeft  EventType = "meeting.left"
+	EventMeetingJoin      EventType = "meeting.join"
+	EventMeetingJoined    EventType = "meeting.joined"     // sent only to the joining client
+	EventParticipantJoined EventType = "meeting.participant_joined" // broadcast to everyone else
+	EventMeetingLeft      EventType = "meeting.left"
 
 	EventChatMessage EventType = "chat.message"
 	EventError       EventType = "error"
