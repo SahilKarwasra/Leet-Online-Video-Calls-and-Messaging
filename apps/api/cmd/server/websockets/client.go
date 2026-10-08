@@ -37,7 +37,7 @@ func (client *Client) ReadPump() {
 		client.Hub.Broadcast(
 			client.MeetingId,
 			Event{
-				Type: EventParticipantLeftMeeting,
+				Type: EventMeetingLeft,
 				Data: ParticipantData{
 					Name:          client.Name,
 					ParticipantId: client.Id,

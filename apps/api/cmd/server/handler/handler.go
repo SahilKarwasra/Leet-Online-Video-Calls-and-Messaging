@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"server/server/services"
 	"server/server/websockets"
 	"strings"
 	"time"
@@ -14,12 +15,14 @@ import (
 )
 
 type WebSocketHandler struct {
-	hub *websockets.Hub
+	hub            *websockets.Hub
+	meetingService *services.MeetingService
 }
 
-func NewWebSocketHandler(hub *websockets.Hub) *WebSocketHandler {
+func NewWebSocketHandler(hub *websockets.Hub, meetingService *services.MeetingService) *WebSocketHandler {
 	return &WebSocketHandler{
-		hub: hub,
+		hub:            hub,
+		meetingService: meetingService,
 	}
 }
 
@@ -42,6 +45,33 @@ func (handler *WebSocketHandler) Connect(c *gin.Context) {
 		)
 		return
 	}
+
+	// Validate the meeting exists in Redis before upgrading
+	exists, err := handler.meetingService.MeetingExists(c.Request.Context(), meetingCode)
+	if err != nil {
+		slog.Error(
+			"failed to check meeting existence",
+			"error", err,
+			"meetingCode", meetingCode,
+		)
+		c.JSON(
+			http.StatusInternalServerError,
+			gin.H{
+				"error": "internal server error",
+			},
+		)
+		return
+	}
+	if !exists {
+		c.JSON(
+			http.StatusNotFound,
+			gin.H{
+				"error": "meeting not found",
+			},
+		)
+		return
+	}
+
 	conn, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		slog.Error(
@@ -50,15 +80,6 @@ func (handler *WebSocketHandler) Connect(c *gin.Context) {
 		)
 		return
 	}
-	defer func(conn *websocket.Conn) {
-		err := conn.Close()
-		if err != nil {
-			slog.Error(
-				"failed to close websocket connection",
-				"error", err,
-			)
-		}
-	}(conn)
 
 	client := &websockets.Client{
 		Id:        uuid.NewString(),
@@ -77,7 +98,7 @@ func (handler *WebSocketHandler) handleJoin(client *websockets.Client) {
 		_ = client.Conn.Close()
 		return
 	}
-	if event.Type != websockets.EventParticipantJoinedMeeting {
+	if event.Type != websockets.EventMeetingJoin {
 		handler.sendErrorAndClose(
 			client,
 			"INVALID_FIRST_EVENT",
@@ -136,7 +157,7 @@ func (handler *WebSocketHandler) handleJoin(client *websockets.Client) {
 	handler.hub.Send(
 		client,
 		websockets.Event{
-			Type: "meeting.joined",
+			Type: websockets.EventMeetingJoined,
 			Data: websockets.ParticipantData{
 				ParticipantId: client.Id,
 				Name:          client.Name,
@@ -144,6 +165,7 @@ func (handler *WebSocketHandler) handleJoin(client *websockets.Client) {
 		},
 	)
 
+	client.ReadPump()
 }
 
 func (handler *WebSocketHandler) sendErrorAndClose(
@@ -154,7 +176,7 @@ func (handler *WebSocketHandler) sendErrorAndClose(
 	handler.hub.Send(
 		client,
 		websockets.Event{
-			Type: "error",
+			Type: websockets.EventError,
 			Data: websockets.ErrorData{
 				Code:    code,
 				Message: message,

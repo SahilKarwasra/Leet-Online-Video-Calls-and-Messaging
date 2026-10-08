@@ -46,7 +46,7 @@ func (hub *Hub) UnregisterClient(client *Client) {
 		delete(hub.clients, client.MeetingId)
 	}
 	slog.Info(
-		"client registered",
+		"client unregistered",
 		"participantId", client.Id,
 		"meetingId", client.MeetingId,
 	)
@@ -109,13 +109,13 @@ func (hub *Hub) Send(client *Client, event Event) {
 
 func (hub *Hub) HandleEvent(client *Client, event Event) {
 	switch event.Type {
-	case ChatMessageReceived:
+	case EventChatMessage:
 		hub.Broadcast(client.MeetingId, event, nil)
 	default:
 		hub.Send(
 			client,
 			Event{
-				Type: "error",
+				Type: EventError,
 				Data: ErrorData{
 					Code:    "UNKNOWN_EVENT",
 					Message: "unknown event type",

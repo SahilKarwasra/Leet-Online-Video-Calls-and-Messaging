@@ -39,6 +39,13 @@ func (ms *MeetingService) CreateMeeting(ctx context.Context) (*MeetingResponse, 
 		return nil, err
 	}
 
+	// Also store a reverse lookup: code → meeting ID
+	codeKey := "meeting_code:" + meetingCode
+	err = ms.rdb.Set(ctx, codeKey, meetingID, 24*time.Hour).Err()
+	if err != nil {
+		return nil, err
+	}
+
 	err = ms.rdb.Expire(ctx, key, 24*time.Hour).Err()
 
 	if err != nil {
@@ -48,3 +55,14 @@ func (ms *MeetingService) CreateMeeting(ctx context.Context) (*MeetingResponse, 
 	return meeting, nil
 
 }
+
+// MeetingExists checks whether a meeting with the given code exists and is active.
+func (ms *MeetingService) MeetingExists(ctx context.Context, code string) (bool, error) {
+	codeKey := "meeting_code:" + code
+	exists, err := ms.rdb.Exists(ctx, codeKey).Result()
+	if err != nil {
+		return false, err
+	}
+	return exists > 0, nil
+}
+

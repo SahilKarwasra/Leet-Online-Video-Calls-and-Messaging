@@ -37,7 +37,7 @@ func main() {
 
 	// Handlers
 	meetingHandler := handler.NewMeetingHandler(meetingService)
-	websocketHandler := handler.NewWebSocketHandler(hub)
+	websocketHandler := handler.NewWebSocketHandler(hub, meetingService)
 
 	router := routes.SetupRouter(meetingHandler, websocketHandler)
 

@@ -3,10 +3,12 @@ package websockets
 type EventType string
 
 const (
-	EventParticipantJoinedMeeting EventType = "participant_joined_meeting"
-	EventParticipantLeftMeeting   EventType = "participant_left_meeting"
+	EventMeetingJoin  EventType = "meeting.join"
+	EventMeetingJoined EventType = "meeting.joined"
+	EventMeetingLeft  EventType = "meeting.left"
 
-	ChatMessageReceived EventType = "chat_message_received"
+	EventChatMessage EventType = "chat.message"
+	EventError       EventType = "error"
 )
 
 type Event struct {
