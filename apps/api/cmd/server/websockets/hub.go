@@ -87,7 +87,7 @@ func (hub *Hub) Broadcast(
 	}
 }
 
-func Send(client *Client, event Event) {
+func (hub *Hub) Send(client *Client, event Event) {
 	message, err := json.Marshal(event)
 	if err != nil {
 		slog.Error(
@@ -103,6 +103,24 @@ func Send(client *Client, event Event) {
 		slog.Warn(
 			"client send buffer full",
 			"participantId", client.Id,
+		)
+	}
+}
+
+func (hub *Hub) HandleEvent(client *Client, event Event) {
+	switch event.Type {
+	case ChatMessageReceived:
+		hub.Broadcast(client.MeetingId, event, nil)
+	default:
+		hub.Send(
+			client,
+			Event{
+				Type: "error",
+				Data: ErrorData{
+					Code:    "UNKNOWN_EVENT",
+					Message: "unknown event type",
+				},
+			},
 		)
 	}
 }

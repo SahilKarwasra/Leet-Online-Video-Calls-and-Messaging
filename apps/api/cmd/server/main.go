@@ -9,6 +9,7 @@ import (
 	"server/server/redis"
 	"server/server/routes"
 	"server/server/services"
+	"server/server/websockets"
 	"syscall"
 
 	redis2 "github.com/redis/go-redis/v9"
@@ -28,14 +29,17 @@ func main() {
 			log.Fatal(err)
 		}
 	}(rdb)
+	// ws
+	hub := websockets.NewHub()
 
 	// Services
 	meetingService := services.NewMeetingService(rdb)
 
 	// Handlers
 	meetingHandler := handler.NewMeetingHandler(meetingService)
+	websocketHandler := handler.NewWebSocketHandler(hub)
 
-	router := routes.SetupRouter(meetingHandler)
+	router := routes.SetupRouter(meetingHandler, websocketHandler)
 
 	log.Println("Starting HTTP & WebSocket server on :8080...")
 

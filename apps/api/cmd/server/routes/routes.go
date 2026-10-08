@@ -8,7 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRouter(meetingHandler *handler.MeetingHandler) *gin.Engine {
+func SetupRouter(
+	meetingHandler *handler.MeetingHandler,
+	websocketHandler *handler.WebSocketHandler,
+) *gin.Engine {
 	engine := gin.Default()
 
 	engine.NoRoute(func(ctx *gin.Context) {
@@ -23,6 +26,9 @@ func SetupRouter(meetingHandler *handler.MeetingHandler) *gin.Engine {
 	{
 		api.POST("/meeting", meetingHandler.CreateMeeting)
 	}
+	engine.GET("/ws/meetings/:code",
+		websocketHandler.Connect,
+	)
 
 	return engine
 }

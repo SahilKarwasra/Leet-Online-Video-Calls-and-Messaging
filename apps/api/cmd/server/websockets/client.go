@@ -26,7 +26,7 @@ type Client struct {
 	Send chan []byte
 }
 
-func ReadPump(client *Client) {
+func (client *Client) ReadPump() {
 	defer func() {
 		client.Hub.UnregisterClient(client)
 		err := client.Conn.Close()
@@ -45,7 +45,9 @@ func ReadPump(client *Client) {
 			},
 			client)
 	}()
+
 	client.Conn.SetReadLimit(maxMessageSize)
+
 	if err := client.Conn.SetReadDeadline(
 		time.Now().Add(pongWait),
 	); err != nil {
@@ -55,6 +57,7 @@ func ReadPump(client *Client) {
 		)
 		return
 	}
+
 	client.Conn.SetPongHandler(func(string) error {
 		return client.Conn.SetReadDeadline(
 			time.Now().Add(pongWait),
@@ -67,5 +70,51 @@ func ReadPump(client *Client) {
 			break
 		}
 		client.Hub.HandleEvent(client, event)
+	}
+}
+
+func (client *Client) WritePump() {
+	ticker := time.NewTicker(pingPeriod)
+
+	defer func() {
+		ticker.Stop()
+		err := client.Conn.Close()
+		if err != nil {
+			return
+		}
+	}()
+
+	for {
+		select {
+		case message, ok := <-client.Send:
+			if err := client.Conn.SetWriteDeadline(
+				time.Now().Add(writeWait),
+			); err != nil {
+				return
+			}
+
+			if !ok {
+				_ = client.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			if err := client.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				return
+			}
+
+		case <-ticker.C:
+			if err := client.Conn.SetWriteDeadline(
+				time.Now().Add(writeWait),
+			); err != nil {
+				return
+			}
+
+			if err := client.Conn.WriteMessage(
+				websocket.PingMessage,
+				nil,
+			); err != nil {
+				return
+			}
+		}
 	}
 }
