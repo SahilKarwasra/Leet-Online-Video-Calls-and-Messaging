@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -66,3 +67,44 @@ func (ms *MeetingService) MeetingExists(ctx context.Context, code string) (bool,
 	return exists > 0, nil
 }
 
+func (ms *MeetingService) AddParticipant(ctx context.Context, meetingCode string, participantId string, name string) error {
+	participantsKey := "meeting:participants:" + meetingCode
+	p := Participant{
+		ParticipantId: participantId,
+		Name:          name,
+	}
+	data, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+
+	pipe := ms.rdb.TxPipeline()
+	pipe.HSet(ctx, participantsKey, participantId, data)
+	pipe.Expire(ctx, participantsKey, 24*time.Hour)
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
+func (ms *MeetingService) RemoveParticipant(ctx context.Context, meetingCode string, participantId string) error {
+	participantsKey := "meeting:participants:" + meetingCode
+	return ms.rdb.HDel(ctx, participantsKey, participantId).Err()
+}
+
+func (ms *MeetingService) GetParticipants(ctx context.Context, meetingCode string) ([]Participant, error) {
+	participantsKey := "meeting:participants:" + meetingCode
+	vals, err := ms.rdb.HVals(ctx, participantsKey).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	participants := make([]Participant, 0, len(vals))
+	for _, val := range vals {
+		var p Participant
+		if err := json.Unmarshal([]byte(val), &p); err != nil {
+			continue
+		}
+		participants = append(participants, p)
+	}
+
+	return participants, nil
+}

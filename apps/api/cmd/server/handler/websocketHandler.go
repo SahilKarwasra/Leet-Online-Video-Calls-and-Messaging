@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -87,12 +88,22 @@ func (handler *WebSocketHandler) Connect(c *gin.Context) {
 		Conn:      conn,
 		Hub:       handler.hub,
 		Send:      make(chan []byte, 256),
+		OnDisconnect: func(c *websockets.Client) {
+			if err := handler.meetingService.RemoveParticipant(context.Background(), c.MeetingId, c.Id); err != nil {
+				slog.Error(
+					"failed to remove participant from redis",
+					"error", err,
+					"participantId", c.Id,
+					"meetingCode", c.MeetingId,
+				)
+			}
+		},
 	}
 	go client.WritePump()
-	handler.handleJoin(client)
+	handler.handleJoin(c.Request.Context(), client)
 }
 
-func (handler *WebSocketHandler) handleJoin(client *websockets.Client) {
+func (handler *WebSocketHandler) handleJoin(ctx context.Context, client *websockets.Client) {
 	var event websockets.Event
 	if err := client.Conn.ReadJSON(&event); err != nil {
 		_ = client.Conn.Close()
@@ -152,9 +163,27 @@ func (handler *WebSocketHandler) handleJoin(client *websockets.Client) {
 
 	client.Name = name
 
+	existingParticipants, err := handler.meetingService.GetParticipants(ctx, client.MeetingId)
+	if err != nil {
+		slog.Error(
+			"failed to get existing participants from redis",
+			"error", err,
+			"meetingCode", client.MeetingId,
+		)
+		existingParticipants = []services.Participant{}
+	}
+
+	if err := handler.meetingService.AddParticipant(ctx, client.MeetingId, client.Id, client.Name); err != nil {
+		slog.Error(
+			"failed to add participant to redis",
+			"error", err,
+			"participantId", client.Id,
+			"meetingCode", client.MeetingId,
+		)
+	}
+
 	handler.hub.RegisterClient(client)
 
-	// Send personal join confirmation to the new participant
 	handler.hub.Send(
 		client,
 		websockets.Event{
@@ -166,7 +195,14 @@ func (handler *WebSocketHandler) handleJoin(client *websockets.Client) {
 		},
 	)
 
-	// Notify everyone else already in the meeting
+	handler.hub.Send(
+		client,
+		websockets.Event{
+			Type: websockets.EventAlreadyExistsParticipants,
+			Data: existingParticipants,
+		},
+	)
+
 	handler.hub.Broadcast(
 		client.MeetingId,
 		websockets.Event{

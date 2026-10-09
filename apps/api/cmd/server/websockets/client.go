@@ -16,23 +16,22 @@ const (
 )
 
 type Client struct {
-	Id        string
-	Name      string
-	MeetingId string
+	Id           string
+	Name         string
+	MeetingId    string
 
 	Conn *websocket.Conn
 	Hub  *Hub
 
-	Send chan []byte
+	Send         chan []byte
+	OnDisconnect func(client *Client)
 }
 
 func (client *Client) ReadPump() {
 	defer func() {
 		client.Hub.UnregisterClient(client)
-		err := client.Conn.Close()
-		if err != nil {
-			log.Printf("Error closing client: %v", err)
-			return
+		if client.OnDisconnect != nil {
+			client.OnDisconnect(client)
 		}
 		client.Hub.Broadcast(
 			client.MeetingId,
@@ -43,7 +42,12 @@ func (client *Client) ReadPump() {
 					ParticipantId: client.Id,
 				},
 			},
-			client)
+			client,
+		)
+		err := client.Conn.Close()
+		if err != nil {
+			log.Printf("Error closing client: %v", err)
+		}
 	}()
 
 	client.Conn.SetReadLimit(maxMessageSize)

@@ -5,3 +5,8 @@ type MeetingResponse struct {
 	Code   string `json:"code"`
 	Status string `json:"status"`
 }
+
+type Participant struct {
+	ParticipantId string `json:"participant_id"`
+	Name          string `json:"name"`
+}
