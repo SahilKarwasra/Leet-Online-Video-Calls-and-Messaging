@@ -1,5 +1,6 @@
 package com.laarasoft.frontend.config.di
 
+import com.laarasoft.frontend.config.network.Endpoints
 import com.laarasoft.frontend.config.network.platformHttpLogger
 import com.laarasoft.frontend.data.datasource.HomeDataSourceImpl
 import com.laarasoft.frontend.data.datasource.KtorWsDataSourceImpl
@@ -24,14 +25,29 @@ import kotlinx.serialization.json.Json
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
+import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import org.koin.plugin.module.dsl.bind
 
 expect val platformModule: Module
 
+val websocketModule: Module = module {
+    single(named("wsBaseUrl")) { Endpoints.WS_BASE_URL }
+
+    single<KtorWsDataSource> {
+        KtorWsDataSourceImpl(
+            httpClient = get(),
+            json = get(),
+            baseUrl = get(named("wsBaseUrl"))
+        )
+    }
+    singleOf(::MeetingEventMapper)
+    singleOf(::WebSocketRepositoryImpl).bind<WebSocketRepository>()
+}
+
 val appModules = module {
-    includes(platformModule)
+    includes(platformModule, websocketModule)
     viewModelOf(::MeetViewModel)
 
     single<HttpClient> {
@@ -61,8 +77,4 @@ val appModules = module {
     singleOf(::HomeDataSourceImpl).bind<HomeDataSource>()
     singleOf(::HomeRepositoryImpl).bind<HomeRepository>()
     viewModelOf(::HomeViewModel)
-
-    singleOf(::KtorWsDataSourceImpl).bind<KtorWsDataSource>()
-    singleOf(::MeetingEventMapper)
-    singleOf(::WebSocketRepositoryImpl).bind<WebSocketRepository>()
 }

@@ -119,7 +119,7 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Button(
-                                onClick = { onAction(HomeAction.CreateMeeting) },
+                                onClick = { onAction(HomeAction.OpenCreateDialog) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(52.dp),
@@ -160,7 +160,7 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Button(
-                                onClick = { onAction(HomeAction.CreateMeeting) },
+                                onClick = { onAction(HomeAction.OpenCreateDialog) },
                                 modifier = Modifier.height(50.dp),
                                 shape = RoundedCornerShape(25.dp),
                                 colors = ButtonDefaults.buttonColors(
@@ -190,7 +190,7 @@ fun HomeScreen(
                                 trailingIcon = {
                                     if (state.meetCode.isNotBlank()) {
                                         TextButton(
-                                            onClick = { onAction(HomeAction.JoinMeeting(state.meetCode)) },
+                                            onClick = { onAction(HomeAction.OpenJoinDialog) },
                                             colors = ButtonDefaults.textButtonColors(
                                                 contentColor = MaterialTheme.colorScheme.primary
                                             ),
@@ -218,7 +218,7 @@ fun HomeScreen(
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                                 keyboardActions = KeyboardActions(onGo = {
                                     if (state.meetCode.isNotBlank()) {
-                                        onAction(HomeAction.JoinMeeting(state.meetCode))
+                                        onAction(HomeAction.OpenJoinDialog)
                                     }
                                 })
                             )
@@ -228,12 +228,26 @@ fun HomeScreen(
             }
         }
 
+        if (state.isCreateDialogOpen) {
+            CreateMeetingDialog(
+                userName = state.userName,
+                errorMessage = state.errorMessage,
+                isLoading = state.isLoading,
+                onNameChange = { onAction(HomeAction.OnUserNameChange(it)) },
+                onCreate = { onAction(HomeAction.CreateMeeting) },
+                onDismiss = { onAction(HomeAction.DismissCreateDialog) }
+            )
+        }
+
         if (state.isJoinDialogOpen) {
             JoinMeetingDialog(
                 meetCode = state.meetCode,
+                userName = state.userName,
                 errorMessage = state.errorMessage,
+                isLoading = state.isLoading,
                 onCodeChange = { onAction(HomeAction.OnMeetCodeChange(it)) },
-                onJoin = { onAction(HomeAction.JoinMeeting(state.meetCode)) },
+                onNameChange = { onAction(HomeAction.OnUserNameChange(it)) },
+                onJoin = { onAction(HomeAction.JoinMeeting(state.meetCode, state.userName)) },
                 onDismiss = { onAction(HomeAction.DismissJoinDialog) }
             )
         }
@@ -241,15 +255,135 @@ fun HomeScreen(
 }
 
 @Composable
+private fun CreateMeetingDialog(
+    userName: String,
+    errorMessage: String?,
+    isLoading: Boolean,
+    onNameChange: (String) -> Unit,
+    onCreate: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        title = {
+            Text(
+                text = "New meeting",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Enter your name to start the meeting.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = userName,
+                    onValueChange = onNameChange,
+                    placeholder = {
+                        Text(
+                            text = "Your name",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    },
+                    trailingIcon = {
+                        if (userName.isNotEmpty()) {
+                            IconButton(onClick = { onNameChange("") }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear name",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    enabled = !isLoading,
+                    isError = errorMessage != null,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                    keyboardActions = KeyboardActions(onGo = {
+                        if (userName.isNotBlank() && !isLoading) onCreate()
+                    })
+                )
+
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onCreate,
+                enabled = userName.isNotBlank() && !isLoading,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Text(
+                    text = if (isLoading) "Starting..." else "Start",
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isLoading,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "Cancel",
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        },
+        shape = RoundedCornerShape(24.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 6.dp
+    )
+}
+
+@Composable
 private fun JoinMeetingDialog(
     meetCode: String,
+    userName: String,
     errorMessage: String?,
+    isLoading: Boolean,
     onCodeChange: (String) -> Unit,
+    onNameChange: (String) -> Unit,
     onJoin: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isLoading) onDismiss() },
         title = {
             Text(
                 text = "Join a meeting",
@@ -265,11 +399,46 @@ private fun JoinMeetingDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Enter the meeting code provided by the organizer.",
+                    text = "Enter your name and meeting code to join.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = userName,
+                    onValueChange = onNameChange,
+                    placeholder = {
+                        Text(
+                            text = "Your name",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    },
+                    trailingIcon = {
+                        if (userName.isNotEmpty()) {
+                            IconButton(onClick = { onNameChange("") }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear name",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    enabled = !isLoading,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                 )
 
                 OutlinedTextField(
@@ -295,6 +464,7 @@ private fun JoinMeetingDialog(
                         }
                     },
                     singleLine = true,
+                    enabled = !isLoading,
                     isError = errorMessage != null,
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -306,7 +476,7 @@ private fun JoinMeetingDialog(
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = {
-                        if (meetCode.isNotBlank()) onJoin()
+                        if (meetCode.isNotBlank() && userName.isNotBlank() && !isLoading) onJoin()
                     })
                 )
 
@@ -323,7 +493,7 @@ private fun JoinMeetingDialog(
         confirmButton = {
             Button(
                 onClick = onJoin,
-                enabled = meetCode.isNotBlank(),
+                enabled = meetCode.isNotBlank() && userName.isNotBlank() && !isLoading,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -331,7 +501,7 @@ private fun JoinMeetingDialog(
                 )
             ) {
                 Text(
-                    text = "Join",
+                    text = if (isLoading) "Joining..." else "Join",
                     fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.labelLarge
                 )
@@ -340,6 +510,7 @@ private fun JoinMeetingDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
+                enabled = !isLoading,
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
