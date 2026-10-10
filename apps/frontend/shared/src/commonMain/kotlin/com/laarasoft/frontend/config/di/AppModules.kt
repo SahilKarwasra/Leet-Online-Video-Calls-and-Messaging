@@ -1,10 +1,15 @@
 package com.laarasoft.frontend.config.di
 
 import com.laarasoft.frontend.config.network.platformHttpLogger
-import com.laarasoft.frontend.data.api.HomeApiImpl
+import com.laarasoft.frontend.data.datasource.HomeDataSourceImpl
+import com.laarasoft.frontend.data.datasource.KtorWsDataSourceImpl
+import com.laarasoft.frontend.data.mapper.MeetingEventMapper
 import com.laarasoft.frontend.data.repository.HomeRepositoryImpl
-import com.laarasoft.frontend.domain.api.HomeApi
+import com.laarasoft.frontend.data.repository.WebSocketRepositoryImpl
+import com.laarasoft.frontend.domain.datasource.HomeDataSource
+import com.laarasoft.frontend.domain.datasource.KtorWsDataSource
 import com.laarasoft.frontend.domain.repository.HomeRepository
+import com.laarasoft.frontend.domain.repository.WebSocketRepository
 import com.laarasoft.frontend.presentation.HomeViewModel
 import com.laarasoft.frontend.presentation.MeetViewModel
 import io.ktor.client.HttpClient
@@ -14,7 +19,6 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.websocket.WebSockets
-import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.koin.core.module.Module
@@ -22,6 +26,7 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import org.koin.plugin.module.dsl.bind
 
 expect val platformModule: Module
 
@@ -53,7 +58,11 @@ val appModules = module {
         }
     }
 
-    singleOf(::HomeApiImpl).bind<HomeApi>()
+    singleOf(::HomeDataSourceImpl).bind<HomeDataSource>()
     singleOf(::HomeRepositoryImpl).bind<HomeRepository>()
     viewModelOf(::HomeViewModel)
+
+    singleOf(::KtorWsDataSourceImpl).bind<KtorWsDataSource>()
+    singleOf(::MeetingEventMapper)
+    singleOf(::WebSocketRepositoryImpl).bind<WebSocketRepository>()
 }
