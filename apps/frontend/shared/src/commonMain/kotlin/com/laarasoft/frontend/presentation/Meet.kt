@@ -57,6 +57,7 @@ import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material.icons.rounded.VideocamOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
@@ -95,19 +96,6 @@ import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.random.Random
 import org.koin.compose.viewmodel.koinViewModel
-
-private val Backdrop = Color(0xFF0D0E12)
-private val Surface1 = Color(0xFF171920)
-private val Surface2 = Color(0xFF22252E)
-private val Accent = Color(0xFF6C8CFF)
-private val Danger = Color(0xFFFF4D5E)
-private val Speaking = Color(0xFF4ADE80)
-private val Muted = Color.White.copy(alpha = 0.6f)
-
-private val AvatarPalette = listOf(
-    Color(0xFF6C8CFF), Color(0xFFB07CFF), Color(0xFFFF8A65),
-    Color(0xFF4DB6AC), Color(0xFFFFB74D), Color(0xFFF06292),
-)
 
 private val ReactionEmojis = listOf("👍", "👏", "❤️", "😂", "🎉", "😮")
 
@@ -151,7 +139,7 @@ fun MeetScreen(
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .background(Backdrop)
+            .background(MaterialTheme.colorScheme.background)
             .safeDrawingPadding()
     ) {
         val isWide = maxWidth >= WideBreakpoint
@@ -236,7 +224,7 @@ fun MeetScreen(
                             .width(360.dp)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(24.dp))
-                            .background(Surface1)
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
                     )
                 }
             }
@@ -246,8 +234,8 @@ fun MeetScreen(
             ModalBottomSheet(
                 onDismissRequest = { onAction(MeetAction.ClosePanel) },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = Surface1,
-                contentColor = Color.White,
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = MaterialTheme.colorScheme.onSurface,
                 dragHandle = null
             ) {
                 PanelContent(
@@ -264,17 +252,18 @@ fun MeetScreen(
 }
 @Composable
 private fun Header(elapsed: String, count: Int) {
+    val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(elapsed, color = Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(elapsed, color = mutedColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.weight(1f))
-        Icon(Icons.Rounded.People, null, tint = Muted, modifier = Modifier.size(16.dp))
+        Icon(Icons.Rounded.People, null, tint = mutedColor, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
-        Text("$count", color = Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text("$count", color = mutedColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 @Composable
@@ -288,7 +277,17 @@ private fun ParticipantGrid(
     val visible = if (hasOverflow) participants.take(maxTiles - 1) else participants
     val hidden = participants.size - visible.size
     val count = visible.size + if (hasOverflow) 1 else 0
-    if (count == 0) return
+    if (count == 0) {
+        Box(modifier, contentAlignment = Alignment.Center) {
+            Text(
+                "Waiting for participants...",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        return
+    }
 
     BoxWithConstraints(modifier) {
         val cols = gridColumns(count, landscape = maxWidth > maxHeight)
@@ -337,12 +336,13 @@ private fun ParticipantTile(
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(20.dp)
-    val border by animateColorAsState(if (participant.isSpeaking) Speaking else Color.Transparent)
+    val speakingBorder = MaterialTheme.colorScheme.primary
+    val border by animateColorAsState(if (participant.isSpeaking) speakingBorder else Color.Transparent)
 
     BoxWithConstraints(
         modifier
             .clip(shape)
-            .background(Surface1)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
             .border(2.dp, border, shape)
     ) {
         if (participant.isVideoOn) {
@@ -362,17 +362,22 @@ private fun ParticipantTile(
                 .align(Alignment.BottomStart)
                 .padding(10.dp)
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.45f))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
                 .padding(horizontal = 10.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (participant.isMuted) {
-                Icon(Icons.Rounded.MicOff, null, tint = Danger, modifier = Modifier.size(14.dp))
+                Icon(
+                    Icons.Rounded.MicOff,
+                    null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(14.dp)
+                )
                 Spacer(Modifier.width(6.dp))
             }
             Text(
                 text = if (participant.isLocal) "You" else participant.name,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -388,10 +393,15 @@ private fun ParticipantTile(
                     .padding(10.dp)
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(Accent),
+                    .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.PanTool, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(
+                    Icons.Rounded.PanTool,
+                    null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }
@@ -402,26 +412,38 @@ private fun OverflowTile(hidden: Int, modifier: Modifier = Modifier) {
     Box(
         modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(Surface1),
+            .background(MaterialTheme.colorScheme.surfaceContainer),
         contentAlignment = Alignment.Center
     ) {
-        Text("+$hidden", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            "+$hidden",
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
 @Composable
 private fun Avatar(name: String, size: Dp, modifier: Modifier = Modifier) {
-    val color = AvatarPalette[(name.hashCode() and Int.MAX_VALUE) % AvatarPalette.size]
+    val palette = listOf(
+        MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.onPrimary,
+        MaterialTheme.colorScheme.secondary to MaterialTheme.colorScheme.onSecondary,
+        MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
+        MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer,
+        MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    val (bgColor, textColor) = palette[(name.hashCode() and Int.MAX_VALUE) % palette.size]
     Box(
         modifier
             .size(size)
             .clip(CircleShape)
-            .background(color.copy(alpha = 0.22f)),
+            .background(bgColor),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = initials(name),
-            color = color,
+            color = textColor,
             fontSize = (size.value * 0.36f).sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -446,7 +468,7 @@ private fun ControlBar(
     onLeave: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(modifier, shape = CircleShape, color = Surface1) {
+    Surface(modifier, shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(
             Modifier.padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -514,11 +536,12 @@ private fun ControlButton(
     width: Dp = 48.dp,
     badge: Boolean = false
 ) {
+    val colorScheme = MaterialTheme.colorScheme
     val (container, tint) = when (tone) {
-        Tone.Neutral -> Surface2 to Color.White
-        Tone.Active -> Accent to Color.White
-        Tone.Off -> Danger.copy(alpha = 0.18f) to Danger
-        Tone.Leave -> Danger to Color.White
+        Tone.Neutral -> colorScheme.surfaceVariant to colorScheme.onSurfaceVariant
+        Tone.Active -> colorScheme.primary to colorScheme.onPrimary
+        Tone.Off -> colorScheme.errorContainer to colorScheme.onErrorContainer
+        Tone.Leave -> colorScheme.error to colorScheme.onError
     }
     val bg by animateColorAsState(container)
 
@@ -538,8 +561,8 @@ private fun ControlButton(
                     .padding(top = 8.dp, end = 8.dp)
                     .size(9.dp)
                     .clip(CircleShape)
-                    .background(Accent)
-                    .border(1.5.dp, Surface2, CircleShape)
+                    .background(colorScheme.primary)
+                    .border(1.5.dp, colorScheme.surfaceVariant, CircleShape)
             )
         }
     }
@@ -555,7 +578,7 @@ private fun ReactionPicker(
     Surface(
         modifier,
         shape = CircleShape,
-        color = Surface2,
+        color = MaterialTheme.colorScheme.surfaceContainer,
         shadowElevation = 8.dp
     ) {
         Row(
@@ -577,17 +600,22 @@ private fun ReactionPicker(
                 Modifier
                     .padding(horizontal = 4.dp)
                     .size(width = 1.dp, height = 22.dp)
-                    .background(Color.White.copy(alpha = 0.12f))
+                    .background(MaterialTheme.colorScheme.outlineVariant)
             )
             Box(
                 Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(if (handRaised) Accent else Color.Transparent)
+                    .background(if (handRaised) MaterialTheme.colorScheme.primary else Color.Transparent)
                     .clickable(onClick = onToggleHand),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.PanTool, "Raise hand", tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(
+                    Icons.Rounded.PanTool,
+                    "Raise hand",
+                    tint = if (handRaised) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }
@@ -666,7 +694,12 @@ private fun PanelContent(
                     .clickable { onAction(MeetAction.ClosePanel) },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.Close, "Close", tint = Muted, modifier = Modifier.size(20.dp))
+                Icon(
+                    Icons.Rounded.Close,
+                    "Close",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
 
@@ -696,21 +729,24 @@ private fun PanelTab(
     onClick: () -> Unit,
     label: String? = null
 ) {
+    val contentColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    val bgColor = if (selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent
+
     Row(
         Modifier
             .height(36.dp)
             .clip(CircleShape)
-            .background(if (selected) Surface2 else Color.Transparent)
+            .background(bgColor)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, tint = if (selected) Color.White else Muted, modifier = Modifier.size(18.dp))
+        Icon(icon, null, tint = contentColor, modifier = Modifier.size(18.dp))
         if (label != null) {
             Spacer(Modifier.width(6.dp))
             Text(
                 label,
-                color = if (selected) Color.White else Muted,
+                color = contentColor,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -748,26 +784,30 @@ private fun ChatPanel(
 
 @Composable
 private fun ChatBubble(message: ChatMessage) {
+    val isMine = message.isMine
+    val bubbleBg = if (isMine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val textColor = if (isMine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+
     Column(
         Modifier.fillMaxWidth(),
-        horizontalAlignment = if (message.isMine) Alignment.End else Alignment.Start
+        horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
     ) {
-        if (!message.isMine) {
+        if (!isMine) {
             Text(
                 message.sender,
-                color = Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(start = 12.dp, bottom = 2.dp)
             )
         }
         Text(
             text = message.text,
-            color = Color.White,
+            color = textColor,
             fontSize = 14.sp,
             modifier = Modifier
                 .widthIn(max = 260.dp)
                 .clip(RoundedCornerShape(18.dp))
-                .background(if (message.isMine) Accent else Surface2)
+                .background(bubbleBg)
                 .padding(horizontal = 14.dp, vertical = 9.dp)
         )
     }
@@ -788,7 +828,7 @@ private fun ChatInput(onSend: (String) -> Unit, modifier: Modifier = Modifier) {
         modifier
             .fillMaxWidth()
             .clip(CircleShape)
-            .background(Surface2)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(start = 18.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -797,12 +837,18 @@ private fun ChatInput(onSend: (String) -> Unit, modifier: Modifier = Modifier) {
             onValueChange = { text = it },
             modifier = Modifier.weight(1f),
             singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-            cursorBrush = SolidColor(Accent),
+            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { send() }),
             decorationBox = { inner ->
-                if (text.isEmpty()) Text("Message", color = Color.White.copy(alpha = 0.35f), fontSize = 15.sp)
+                if (text.isEmpty()) {
+                    Text(
+                        "Message",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        fontSize = 15.sp
+                    )
+                }
                 inner()
             }
         )
@@ -810,14 +856,14 @@ private fun ChatInput(onSend: (String) -> Unit, modifier: Modifier = Modifier) {
             Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(if (text.isBlank()) Color.Transparent else Accent)
+                .background(if (text.isBlank()) Color.Transparent else MaterialTheme.colorScheme.primary)
                 .clickable(enabled = text.isNotBlank()) { send() },
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.AutoMirrored.Rounded.Send,
                 "Send",
-                tint = if (text.isBlank()) Muted else Color.White,
+                tint = if (text.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -842,20 +888,25 @@ private fun PeoplePanel(participants: List<Participant>, modifier: Modifier = Mo
                 Spacer(Modifier.width(12.dp))
                 Text(
                     text = if (p.isLocal) "${p.name} (You)" else p.name,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 14.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
                 if (p.isHandRaised) {
-                    Icon(Icons.Rounded.PanTool, null, tint = Accent, modifier = Modifier.size(16.dp))
+                    Icon(
+                        Icons.Rounded.PanTool,
+                        null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
                     Spacer(Modifier.width(10.dp))
                 }
                 Icon(
                     if (p.isMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
                     null,
-                    tint = if (p.isMuted) Danger else Muted,
+                    tint = if (p.isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
             }

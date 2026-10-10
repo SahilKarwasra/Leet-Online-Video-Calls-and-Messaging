@@ -23,19 +23,7 @@ class MeetViewModel(
     private val wsRepository: WebSocketRepository
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(
-        MeetState(
-            participants = listOf(
-                Participant(
-                    id = "LOCAL_ID",
-                    name = "You",
-                    isLocal = true,
-                    isMuted = false,
-                    isVideoOn = true,
-                )
-            )
-        )
-    )
+    private val _state = MutableStateFlow(MeetState())
     val state = _state
         .stateIn(
             scope = viewModelScope,
