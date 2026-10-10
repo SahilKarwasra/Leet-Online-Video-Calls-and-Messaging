@@ -1,5 +1,6 @@
 package com.laarasoft.frontend.data.datasource
 
+import com.laarasoft.frontend.config.network.platformHttpLogger
 import com.laarasoft.frontend.data.dto.MeetEventDto
 import com.laarasoft.frontend.domain.datasource.KtorWsDataSource
 import io.ktor.client.HttpClient
@@ -47,8 +48,10 @@ class KtorWsDataSourceImpl(
             check(sessions == null) {
                 "A meeting WebSocket session is already active"
             }
+            val wsUrl = "${baseUrl.trimEnd('/')}/ws/meetings/$meetingId"
+            platformHttpLogger.log("[WS_CONNECT] Connecting to $wsUrl with name '$name'")
             val socket = httpClient.webSocketSession {
-                url("${baseUrl.trimEnd('/')}/ws/meetings/$meetingId")
+                url(wsUrl)
             }
             sessions = socket
 
@@ -59,7 +62,9 @@ class KtorWsDataSourceImpl(
                         put("name", name)
                     }
                 )
-                socket.send(Frame.Text(json.encodeToString(joinEvent)))
+                val joinJson = json.encodeToString(joinEvent)
+                platformHttpLogger.log("[WS_OUTGOING] Sending: $joinJson")
+                socket.send(Frame.Text(joinJson))
                 val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
                 connectionScope = scope
 
@@ -69,18 +74,24 @@ class KtorWsDataSourceImpl(
                             .consumeAsFlow()
                             .filterIsInstance<Frame.Text>()
                             .collect { frame ->
-                                val event = json.decodeFromString<
-                                        MeetEventDto
-                                        >(frame.readText())
-
-                                mutableEvent.emit(event)
+                                val rawText = frame.readText()
+                                platformHttpLogger.log("[WS_INCOMING] Raw frame received: $rawText")
+                                try {
+                                    val event = json.decodeFromString<MeetEventDto>(rawText)
+                                    platformHttpLogger.log("[WS_INCOMING] Parsed MeetEventDto: type='${event.type}', data=${event.data}")
+                                    mutableEvent.emit(event)
+                                } catch (e: Exception) {
+                                    platformHttpLogger.log("[WS_INCOMING] Error parsing frame: $rawText | Error: ${e.message}")
+                                }
                             }
                     } catch (e: Exception) {
+                        platformHttpLogger.log("[WS_INCOMING] Receive loop error: ${e.message}")
                         throw e
                     }
                 }
 
             } catch (e: Exception) {
+                platformHttpLogger.log("[WS_CONNECT] Connection failed: ${e.message}")
                 sessions = null
                 socket.close()
                 throw e

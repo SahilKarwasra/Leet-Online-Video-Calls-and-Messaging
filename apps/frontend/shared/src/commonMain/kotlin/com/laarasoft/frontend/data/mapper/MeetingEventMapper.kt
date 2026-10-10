@@ -18,17 +18,17 @@ class MeetingEventMapper(
         return when (events.type) {
             "meeting.joined" -> {
                 val data = json.decodeFromJsonElement<ParticipantDto>(events.data)
-                MeetEvents.Joined(data.toDomain())
+                MeetEvents.Joined(data.toDomain().copy(isLocal = true))
             }
 
             "meeting.already_exists_participants" -> {
                 val data = json.decodeFromJsonElement<List<ParticipantDto>>(events.data)
-                MeetEvents.ExistingParticipants(data.map { it.toDomain() })
+                MeetEvents.ExistingParticipants(data.map { it.toDomain().copy(isLocal = false) })
             }
 
             "meeting.participant_joined" -> {
                 val data = json.decodeFromJsonElement<ParticipantDto>(events.data)
-                MeetEvents.Joined(data.toDomain())
+                MeetEvents.Joined(data.toDomain().copy(isLocal = false))
             }
 
             "meeting.left" -> {
