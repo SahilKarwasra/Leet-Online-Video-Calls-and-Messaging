@@ -90,7 +90,11 @@ fun AppNavigation() {
             }
             composable<AppDestination.MeetScreen> {
                 val meetId = it.toRoute<AppDestination.MeetScreen>().meetId
-                MeetRoot()
+                MeetRoot(
+                    onNavigateBack = {
+                        appController.upPress()
+                    }
+                )
             }
         }
     }

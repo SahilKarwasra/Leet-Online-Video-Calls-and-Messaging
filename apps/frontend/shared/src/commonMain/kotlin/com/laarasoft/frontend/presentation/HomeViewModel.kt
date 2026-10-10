@@ -86,7 +86,7 @@ class HomeViewModel(
             _state.update { it.copy(isLoading = true, errorMessage = null) }
             try {
                 wsRepository.connect(cleanCode, name)
-                _state.update { it.copy(isLoading = false, isJoinDialogOpen = false, errorMessage = null) }
+                _state.update { it.copy(isLoading = false, isJoinDialogOpen = false, meetCode = "", errorMessage = null) }
                 _events.send(HomeEvents.NavigateToMeet(cleanCode))
             } catch (e: Exception) {
                 _state.update {
@@ -108,7 +108,7 @@ class HomeViewModel(
                     try {
                         wsRepository.connect(it.meetId, name)
                         _state.update { state ->
-                            state.copy(isLoading = false, isCreateDialogOpen = false, errorMessage = null)
+                            state.copy(isLoading = false, isCreateDialogOpen = false, meetCode = "", errorMessage = null)
                         }
                         _events.send(HomeEvents.NavigateToMeet(it.meetId))
                     } catch (e: Exception) {
