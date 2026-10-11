@@ -34,8 +34,8 @@ class KtorWsDataSourceImpl(
     private val baseUrl: String,
 ) : KtorWsDataSource {
 
-    private val mutableEvent = MutableSharedFlow<MeetEventDto>(extraBufferCapacity = 64)
-    override val events: Flow<MeetEventDto> = mutableEvent.asSharedFlow()
+    private var mutableEvent = MutableSharedFlow<MeetEventDto>(replay = 64, extraBufferCapacity = 64)
+    override val events: Flow<MeetEventDto> get() = mutableEvent.asSharedFlow()
 
     private var sessions: DefaultWebSocketSession? = null
     private var receiveJob: Job? = null
@@ -48,6 +48,8 @@ class KtorWsDataSourceImpl(
             check(sessions == null) {
                 "A meeting WebSocket session is already active"
             }
+            // Reset the replay cache so events from a prior session aren't replayed to new subscribers
+            mutableEvent = MutableSharedFlow(replay = 64, extraBufferCapacity = 64)
             val wsUrl = "${baseUrl.trimEnd('/')}/ws/meetings/$meetingId"
             platformHttpLogger.log("[WS_CONNECT] Connecting to $wsUrl with name '$name'")
             val socket = httpClient.webSocketSession {
@@ -113,6 +115,9 @@ class KtorWsDataSourceImpl(
             connectionScope = null
 
             socket.close()
+
+            // Clear the replay cache so stale events don't leak into the next session
+            mutableEvent = MutableSharedFlow(replay = 64, extraBufferCapacity = 64)
         }
     }
 
