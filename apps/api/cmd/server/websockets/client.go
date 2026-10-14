@@ -12,19 +12,21 @@ const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 4096
+	maxMessageSize = 1 << 20 // 1 MiB
 )
 
 type Client struct {
-	Id           string
-	Name         string
-	MeetingId    string
+	Id        string
+	Name      string
+	MeetingId string
 
 	Conn *websocket.Conn
 	Hub  *Hub
 
 	Send         chan []byte
 	OnDisconnect func(client *Client)
+
+	OnEvent func(client *Client, event Event)
 }
 
 func (client *Client) ReadPump() {
@@ -73,7 +75,11 @@ func (client *Client) ReadPump() {
 		if err := client.Conn.ReadJSON(&event); err != nil {
 			break
 		}
-		client.Hub.HandleEvent(client, event)
+		if client.OnEvent != nil {
+			client.OnEvent(client, event)
+		} else {
+			client.Hub.HandleEvent(client, event)
+		}
 	}
 }
 

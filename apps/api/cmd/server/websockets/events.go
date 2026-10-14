@@ -11,10 +11,18 @@ const (
 
 	EventChatMessage EventType = "chat.message"
 	EventError       EventType = "error"
-
-	WebRtcOffer  EventType = "webrtc.offer"
-	WebRtcAnswer EventType = "webrtc.answer"
 )
+
+const (
+	EventWebRTCOffer        EventType = "webrtc.offer"
+	EventWebRTCAnswer       EventType = "webrtc.answer"
+	EventWebRTCICECandidate EventType = "webrtc.ice_candidate"
+)
+
+type SDPDescriptionPayload struct {
+	Type string `json:"type"`
+	SDP  string `json:"sdp"`
+}
 
 type Event struct {
 	Type EventType `json:"type"`
@@ -33,8 +41,4 @@ type ParticipantData struct {
 type ErrorData struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
-}
-type SDPPayload struct {
-	Type string `json:"type"`
-	SDP  string `json:"sdp"`
 }

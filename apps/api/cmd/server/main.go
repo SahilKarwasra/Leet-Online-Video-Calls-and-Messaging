@@ -6,6 +6,7 @@ import (
 	"log"
 	"os/signal"
 	"server/server/handler"
+	"server/server/media"
 	"server/server/redis"
 	"server/server/routes"
 	"server/server/services"
@@ -29,15 +30,16 @@ func main() {
 			log.Fatal(err)
 		}
 	}(rdb)
-	// ws
+	// ws/wrtc
 	hub := websockets.NewHub()
+	mediaManager := media.NewManager()
 
 	// Services
 	meetingService := services.NewMeetingService(rdb)
 
 	// Handlers
 	meetingHandler := handler.NewMeetingHandler(meetingService)
-	websocketHandler := handler.NewWebSocketHandler(hub, meetingService)
+	websocketHandler := handler.NewWebSocketHandler(hub, meetingService, mediaManager)
 
 	router := routes.SetupRouter(meetingHandler, websocketHandler)
 
