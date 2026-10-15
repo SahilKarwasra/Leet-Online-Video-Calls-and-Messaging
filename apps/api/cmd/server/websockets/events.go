@@ -11,9 +11,7 @@ const (
 
 	EventChatMessage EventType = "chat.message"
 	EventError       EventType = "error"
-)
 
-const (
 	EventWebRTCOffer        EventType = "webrtc.offer"
 	EventWebRTCAnswer       EventType = "webrtc.answer"
 	EventWebRTCICECandidate EventType = "webrtc.ice_candidate"
