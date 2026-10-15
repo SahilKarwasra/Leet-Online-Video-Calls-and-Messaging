@@ -76,6 +76,7 @@ ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "kto
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-auth = { module = "io.ktor:ktor-client-auth", version.ref = "ktor"}
 ktor-client-websocket = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
+ktor-client-webrtc = { module = "io.ktor:ktor-client-webrtc", version.ref = "ktor" }
 ktor-client-content-encoding = { module = "io.ktor:ktor-client-encoding", version.ref = "ktor" }
 
 [plugins]
@@ -95,7 +96,8 @@ ktor = [
     "ktor-client-content-encoding",
     "ktor-serialization-kotlinx-json",
     "ktor-client-auth",
-    "ktor-client-websocket"
+    "ktor-client-websocket",
+    "ktor-client-webrtc"
 ]
 coil = [
     "coil-compose",
