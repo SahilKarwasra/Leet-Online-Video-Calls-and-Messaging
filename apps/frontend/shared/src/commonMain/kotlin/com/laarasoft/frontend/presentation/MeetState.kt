@@ -13,9 +13,10 @@ data class ChatMessage(
 data class FloatingReaction(
     val id: Long,
     val emoji: String,
+    val sender: String,
 )
 
-enum class MeetPanel { None, Chat, People }
+enum class MeetPanel { None, Chat, People, Info }
 
 data class MeetState(
     val participants: List<Participant> = emptyList(),

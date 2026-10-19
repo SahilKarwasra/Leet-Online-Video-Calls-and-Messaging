@@ -3,6 +3,7 @@ package websockets
 import (
 	"log"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -27,6 +28,10 @@ type Client struct {
 	OnDisconnect func(client *Client)
 
 	OnEvent func(client *Client, event Event)
+
+	lastReactionAt time.Time
+	// Read by other clients' goroutines when someone joins.
+	handRaised atomic.Bool
 }
 
 func (client *Client) ReadPump() {

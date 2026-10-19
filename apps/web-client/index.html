@@ -16,13 +16,27 @@
   </section>
 
   <section id="call" hidden>
-    <p>Meeting code: <b id="meeting-code"></b></p>
-    <div id="grid"></div>
-    <div class="controls">
-      <button id="mic">Mute</button>
-      <button id="cam">Camera off</button>
-      <button id="leave" class="danger">Leave</button>
+    <p>Meeting code: <b id="meeting-code"></b> <button id="copy" class="small">Copy</button></p>
+    <div class="layout">
+      <div>
+        <div id="grid"></div>
+        <div class="controls">
+          <button id="mic">Mute</button>
+          <button id="cam">Camera off</button>
+          <button id="hand">Raise hand</button>
+          <span id="reactions"></span>
+          <button id="leave" class="danger">Leave</button>
+        </div>
+      </div>
+      <aside id="chat">
+        <div id="messages"></div>
+        <form id="chat-form">
+          <input id="chat-input" placeholder="Message" maxlength="1000" autocomplete="off">
+          <button>Send</button>
+        </form>
+      </aside>
     </div>
+    <div id="floating"></div>
   </section>
 
   <script src="app.js"></script>

@@ -216,6 +216,8 @@ func (handler *WebSocketHandler) handleJoin(ctx context.Context, client *websock
 		},
 	)
 
+	handler.hub.SendRaisedHands(client)
+
 	handler.hub.Broadcast(
 		client.MeetingId,
 		websockets.Event{

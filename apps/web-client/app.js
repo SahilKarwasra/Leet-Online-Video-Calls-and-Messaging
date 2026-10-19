@@ -8,6 +8,10 @@ let names = {};              // participantId -> name
 let pendingCandidates = [];  // remote ICE that arrived before a remote description
 let offerSent = false;
 let localCandidates = [];    // our ICE gathered before the offer went out
+let myId = null;
+let handRaised = false;
+const raisedHands = new Set(); // participantIds; a hand can arrive before that person's tile exists
+const REACTIONS = ["👍", "👏", "❤️", "😂", "🎉", "😮"];
 
 $("join").onclick = async () => {
   try {
@@ -50,6 +54,7 @@ async function handleEvent({ type, data }) {
   console.log("<-", type, data);
   switch (type) {
     case "meeting.joined":
+      myId = data.participant_id;
       await startCall();
       break;
     case "meeting.already_exists_participants":
@@ -60,6 +65,16 @@ async function handleEvent({ type, data }) {
       break;
     case "meeting.left":
       document.getElementById("tile-" + data.participant_id)?.remove();
+      raisedHands.delete(data.participant_id);
+      break;
+    case "chat.message":
+      addMessage(data);
+      break;
+    case "meeting.reaction":
+      floatReaction(data.emoji, data.name);
+      break;
+    case "meeting.hand_raise":
+      setTileHand(data.participant_id, data.raised);
       break;
     case "webrtc.offer":
       await pc.setRemoteDescription({ type: "offer", sdp: data.sdp });
@@ -128,9 +143,71 @@ function addTile(id, label, stream, isLocal) {
   const name = document.createElement("span");
   name.textContent = label;
 
-  tile.append(video, name);
+  const hand = document.createElement("b");
+  hand.className = "hand";
+  hand.textContent = "✋";
+  hand.hidden = !raisedHands.has(id);
+
+  tile.append(video, name, hand);
   $("grid").append(tile);
 }
+
+function setTileHand(participantId, raised) {
+  if (raised) raisedHands.add(participantId);
+  else raisedHands.delete(participantId);
+  const hand = document.querySelector(`#tile-${participantId} .hand`);
+  if (hand) hand.hidden = !raised;
+}
+
+function addMessage({ participant_id, name, message }) {
+  const el = document.createElement("p");
+  el.className = participant_id === myId ? "mine" : "";
+  const who = document.createElement("b");
+  who.textContent = participant_id === myId ? "You" : name;
+  el.append(who, document.createTextNode(message)); // textContent only: never render chat as HTML
+  $("messages").append(el);
+  $("messages").scrollTop = $("messages").scrollHeight;
+}
+
+function floatReaction(emoji, name) {
+  const el = document.createElement("div");
+  el.className = "float";
+  el.style.left = 20 + Math.random() * 60 + "%";
+  el.textContent = `${emoji} ${name}`;
+  $("floating").append(el);
+  setTimeout(() => el.remove(), 2800);
+}
+
+$("chat-form").onsubmit = (e) => {
+  e.preventDefault();
+  const message = $("chat-input").value.trim();
+  if (!message) return;
+  send("chat.message", { message }); // shown when the server echoes it back
+  $("chat-input").value = "";
+};
+
+REACTIONS.forEach((emoji) => {
+  const button = document.createElement("button");
+  button.textContent = emoji;
+  button.onclick = () => {
+    send("meeting.reaction", { emoji });
+    floatReaction(emoji, "You"); // the server doesn't echo reactions to the sender
+  };
+  $("reactions").append(button);
+});
+
+$("hand").onclick = () => {
+  handRaised = !handRaised;
+  send("meeting.hand_raise", { raised: handRaised });
+  setTileHand("local", handRaised);
+  $("hand").textContent = handRaised ? "Lower hand" : "Raise hand";
+};
+
+$("copy").onclick = async () => {
+  await navigator.clipboard.writeText($("meeting-code").textContent);
+  $("copy").textContent = "Copied";
+  setTimeout(() => ($("copy").textContent = "Copy"), 2000);
+};
 
 $("mic").onclick = () => {
   const track = localStream.getAudioTracks()[0];
