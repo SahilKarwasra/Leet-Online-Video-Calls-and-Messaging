@@ -46,6 +46,8 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.CallEnd
 import androidx.compose.material.icons.rounded.Chat
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MicOff
@@ -70,6 +72,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,6 +81,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -90,12 +94,16 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.laarasoft.frontend.core.theme.LeetTheme
 import com.laarasoft.frontend.core.utils.ObserveAsEvents
+import com.laarasoft.frontend.core.utils.plainTextClipEntry
 import com.laarasoft.frontend.domain.models.Participant
 import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.random.Random
 import com.laarasoft.frontend.presentation.componenet.RequestMediaPermissions
 import com.laarasoft.frontend.presentation.componenet.VideoContent
+import com.laarasoft.frontend.core.utils.ui.UiEvent
+import com.laarasoft.frontend.core.utils.ui.UiEventController
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
 private val ReactionEmojis = listOf("👍", "👏", "❤️", "😂", "🎉", "😮")
@@ -103,6 +111,7 @@ private val ReactionEmojis = listOf("👍", "👏", "❤️", "😂", "🎉", "�
 private val WideBreakpoint = 840.dp
 @Composable
 fun MeetRoot(
+    meetCode: String,
     viewModel: MeetViewModel = koinViewModel(),
     onNavigateBack: () -> Unit = {}
 ) {
@@ -118,6 +127,7 @@ fun MeetRoot(
 
     MeetScreen(
         state = state,
+        meetCode = meetCode,
         onAction = viewModel::onAction,
         onNavigateBack = { viewModel.onAction(MeetAction.LeaveMeeting) },
         videoContent = { participant, modifier ->
@@ -133,10 +143,13 @@ fun MeetRoot(
 fun MeetScreen(
     state: MeetState,
     onAction: (MeetAction) -> Unit,
+    meetCode: String = "",
     onNavigateBack: () -> Unit = {},
     videoContent: @Composable (Participant, Modifier) -> Unit = { _, _ -> }
 ) {
     var showReactions by remember { mutableStateOf(false) }
+    var showMeetingReady by remember { mutableStateOf(true) }
+    val copyMeetCode = rememberCopyMeetCode(meetCode)
 
     BoxWithConstraints(
         Modifier
@@ -161,7 +174,8 @@ fun MeetScreen(
                 Column(Modifier.fillMaxSize()) {
                     Header(
                         elapsed = state.elapsed,
-                        count = state.participants.size
+                        count = state.participants.size,
+                        meetCode = meetCode
                     )
                     ParticipantGrid(
                         participants = state.participants,
@@ -177,6 +191,10 @@ fun MeetScreen(
                         isWide = isWide,
                         reactionsOpen = showReactions,
                         onToggleReactions = { showReactions = !showReactions },
+                        onInfo = {
+                            showMeetingReady = false
+                            onAction(MeetAction.TogglePanel(MeetPanel.Info))
+                        },
                         onAction = onAction,
                         onLeave = onNavigateBack,
                         modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -190,6 +208,21 @@ fun MeetScreen(
                         .fillMaxSize()
                         .padding(bottom = 72.dp)
                 )
+
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showMeetingReady && meetCode.isNotBlank(),
+                    enter = fadeIn() + slideInVertically { it / 3 },
+                    exit = fadeOut() + slideOutVertically { it / 3 },
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(bottom = 72.dp)
+                ) {
+                    MeetingReadyCard(
+                        meetCode = meetCode,
+                        onCopy = copyMeetCode,
+                        onDismiss = { showMeetingReady = false }
+                    )
+                }
 
                 androidx.compose.animation.AnimatedVisibility(
                     visible = showReactions,
@@ -221,6 +254,8 @@ fun MeetScreen(
                 ) {
                     PanelContent(
                         state = state,
+                        meetCode = meetCode,
+                        onCopyMeetCode = copyMeetCode,
                         onAction = onAction,
                         modifier = Modifier
                             .width(360.dp)
@@ -242,6 +277,8 @@ fun MeetScreen(
             ) {
                 PanelContent(
                     state = state,
+                    meetCode = meetCode,
+                    onCopyMeetCode = copyMeetCode,
                     onAction = onAction,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -253,7 +290,7 @@ fun MeetScreen(
     }
 }
 @Composable
-private fun Header(elapsed: String, count: Int) {
+private fun Header(elapsed: String, count: Int, meetCode: String) {
     val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         Modifier
@@ -262,6 +299,21 @@ private fun Header(elapsed: String, count: Int) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(elapsed, color = mutedColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        if (meetCode.isNotBlank()) {
+            Box(
+                Modifier
+                    .padding(horizontal = 10.dp)
+                    .size(width = 1.dp, height = 14.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
+            Text(
+                meetCode,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
+        }
         Spacer(Modifier.weight(1f))
         Icon(Icons.Rounded.People, null, tint = mutedColor, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
@@ -466,6 +518,7 @@ private fun ControlBar(
     isWide: Boolean,
     reactionsOpen: Boolean,
     onToggleReactions: () -> Unit,
+    onInfo: () -> Unit,
     onAction: (MeetAction) -> Unit,
     onLeave: () -> Unit,
     modifier: Modifier = Modifier
@@ -517,6 +570,12 @@ private fun ControlBar(
                     onClick = { onAction(MeetAction.TogglePanel(MeetPanel.People)) }
                 )
             }
+            ControlButton(
+                icon = Icons.Rounded.Info,
+                description = "Meeting details",
+                tone = if (state.panel == MeetPanel.Info) Tone.Active else Tone.Neutral,
+                onClick = onInfo
+            )
             ControlButton(
                 icon = Icons.Rounded.CallEnd,
                 description = "Leave",
@@ -647,9 +706,8 @@ private fun BoxScope.FloatingEmoji(reaction: FloatingReaction, onDone: (Long) ->
         onDone(reaction.id)
     }
 
-    Text(
-        text = reaction.emoji,
-        fontSize = 34.sp,
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .graphicsLayer {
@@ -661,11 +719,28 @@ private fun BoxScope.FloatingEmoji(reaction: FloatingReaction, onDone: (Long) ->
                 scaleX = s
                 scaleY = s
             }
-    )
+    ) {
+        Text(text = reaction.emoji, fontSize = 34.sp)
+        Text(
+            text = reaction.sender,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .widthIn(max = 96.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+        )
+    }
 }
 @Composable
 private fun PanelContent(
     state: MeetState,
+    meetCode: String,
+    onCopyMeetCode: () -> Unit,
     onAction: (MeetAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -687,6 +762,11 @@ private fun PanelContent(
                 label = state.participants.size.toString(),
                 selected = state.panel == MeetPanel.People,
                 onClick = { onAction(MeetAction.OpenPanel(MeetPanel.People)) }
+            )
+            PanelTab(
+                icon = Icons.Rounded.Info,
+                selected = state.panel == MeetPanel.Info,
+                onClick = { onAction(MeetAction.OpenPanel(MeetPanel.Info)) }
             )
             Spacer(Modifier.weight(1f))
             Box(
@@ -719,7 +799,156 @@ private fun PanelContent(
                     .weight(1f)
                     .fillMaxWidth()
             )
+            MeetPanel.Info -> MeetingDetailsPanel(
+                meetCode = meetCode,
+                onCopy = onCopyMeetCode,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            )
             MeetPanel.None -> Unit
+        }
+    }
+}
+
+@Composable
+private fun rememberCopyMeetCode(meetCode: String): () -> Unit {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    return remember(meetCode, clipboard, scope) {
+        {
+            scope.launch {
+                clipboard.setClipEntry(plainTextClipEntry(meetCode))
+                UiEventController.send(UiEvent.Snackbar("Meeting code copied"))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MeetingReadyCard(
+    meetCode: String,
+    onCopy: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier.widthIn(max = 360.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 8.dp
+    ) {
+        Column(Modifier.padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Your meeting's ready",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 18.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button, onClick = onDismiss),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Close,
+                        "Close",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Text(
+                "Share this meeting code with others you want in the meeting",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                modifier = Modifier.padding(end = 12.dp, top = 4.dp, bottom = 16.dp)
+            )
+            MeetCodeRow(meetCode, onCopy, Modifier.padding(end = 12.dp))
+        }
+    }
+}
+
+@Composable
+private fun MeetCodeRow(meetCode: String, onCopy: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            meetCode,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 15.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClick = onCopy),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Rounded.ContentCopy,
+                "Copy meeting code",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MeetingDetailsPanel(meetCode: String, onCopy: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Text(
+            "Meeting details",
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 18.sp,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        Text(
+            "Joining info",
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            meetCode,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 14.sp,
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+        )
+        Row(
+            Modifier
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClick = onCopy)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Rounded.ContentCopy,
+                null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "Copy joining info",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
@@ -921,6 +1150,7 @@ private fun PeoplePanel(participants: List<Participant>, modifier: Modifier = Mo
 private fun Preview() {
     LeetTheme {
         MeetScreen(
+            meetCode = "abcd1234",
             state = MeetState(
                 elapsed = "12:48",
                 participants = listOf(

@@ -16,7 +16,7 @@ data class FloatingReaction(
     val sender: String,
 )
 
-enum class MeetPanel { None, Chat, People }
+enum class MeetPanel { None, Chat, People, Info }
 
 data class MeetState(
     val participants: List<Participant> = emptyList(),
