@@ -11,6 +11,7 @@ Create a meeting, share the 8-character code, and everyone who joins sees and he
 - [Features](#features)
 - [Tech stack](#tech-stack)
 - [How it works](#how-it-works)
+- [Documentation](#documentation)
 - [Project structure](#project-structure)
 - [Getting started](#getting-started)
   - [Prerequisites](#prerequisites)
@@ -19,9 +20,6 @@ Create a meeting, share the 8-character code, and everyone who joins sees and he
   - [Testing a call](#testing-a-call)
 - [Configuration](#configuration)
 - [API reference](#api-reference)
-  - [REST](#rest)
-  - [WebSocket events](#websocket-events)
-  - [Call flow](#call-flow)
 - [Frontend architecture](#frontend-architecture)
 - [Troubleshooting](#troubleshooting)
 - [Known limitations](#known-limitations)
@@ -34,6 +32,11 @@ Create a meeting, share the 8-character code, and everyone who joins sees and he
 - Multi-party audio and video calls through an SFU (each client uploads its media once)
 - Live participant list: join and leave updates in real time
 - Mute/unmute microphone and turn the camera on/off
+- In-meeting chat: messages are broadcast live and never stored, so you only see what's sent while you're in the meeting
+- Emoji reactions that float up on everyone's screen
+- Raise hand: everyone sees it on your tile, including people who join later
+- Google Meet–style "Your meeting's ready" card and a Meeting details panel to copy the meeting code
+- The web test client supports chat, reactions, raise hand and copying the code too
 - Responsive meeting UI: adaptive video grid, side panel on wide screens, bottom sheet on phones
 - Runs on Android, iOS, macOS/Windows/Linux desktop, and in the browser (test client)
 
@@ -50,25 +53,45 @@ Create a meeting, share the 8-character code, and everyone who joins sees and he
 
 ## How it works
 
-```
-                 ┌──────────────── Go backend :8080 ────────────────┐
-                 │                                                  │
-  Client A ──────┤  REST  /api/v1/meeting      ──►  Redis           │
-  (Android)      │                                  (meetings,      │
-                 │  WebSocket /ws/meetings/:code    participants)   │
-  Client B ──────┤    • meeting events (join/leave)                 │
-  (iOS)          │    • WebRTC signaling (offer/answer/ICE)         │
-                 │                                                  │
-  Client C ──────┤  Pion SFU (media/)                               │
-  (Desktop/Web)  │    receives each client's audio + video once     │
-                 │    and forwards it to everyone else              │
-                 └──────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Clients
+        AND[Android]
+        IOS[iOS]
+        DESK[Desktop]
+        WEB[Web test client]
+    end
+
+    subgraph Server["Go backend :8080"]
+        REST["REST<br/>POST /api/v1/meeting"]
+        WS["WebSocket hub<br/>/ws/meetings/:code"]
+        SFU["Pion SFU"]
+    end
+
+    REDIS[("Redis")]
+
+    Clients -- "create meeting" --> REST
+    Clients <-- "join/leave, chat, reactions,<br/>hand raise, WebRTC signaling" --> WS
+    Clients <-- "audio + video (UDP)" --> SFU
+    REST & WS --> REDIS
+    WS <--> SFU
 ```
 
 1. **Create:** `POST /api/v1/meeting` stores a meeting in Redis and returns an 8-character code. The meeting expires after 24 hours.
 2. **Join:** the client opens `ws://host:8080/ws/meetings/{code}` and sends `meeting.join` with its name. The server replies with the client's own participant id, the people already in the meeting, and tells everyone else that someone joined.
 3. **Media:** the client creates a peer connection with its camera and mic tracks and sends a `webrtc.offer`. The server answers. When other participants publish or leave, the server sends a new `webrtc.offer`, and the client answers it.
 4. **Forwarding:** the SFU forwards every track to all other participants. Forwarded track and stream ids are named `"<participantId>:<originalId>"`, which is how clients know whose video a track is.
+5. **Chat, reactions, hand raise:** sent over the same WebSocket. The server validates them, adds the sender's identity and broadcasts them. Nothing is stored.
+
+More diagrams (backend packages, SFU media path, join sequence, client layers) are in [docs/architecture.md](docs/architecture.md).
+
+## Documentation
+
+| Doc | What's in it |
+| --- | --- |
+| [docs/architecture.md](docs/architecture.md) | System and component diagrams, SFU media path, join and chat flows, where state lives, design decisions |
+| [docs/protocol.md](docs/protocol.md) | REST endpoint, every WebSocket event and payload, call flow, validation rules and limits |
+| [docs/infra.md](docs/infra.md) | Ports, Redis keys, configuration, bandwidth sizing, scaling, production checklist |
 
 ## Project structure
 
@@ -199,7 +222,7 @@ Open **http://localhost:3000**. Browsers only allow camera access on `localhost`
 | `REDIS_PASSWORD` | _(empty)_ | Redis password |
 | `REDIS_DB` | `0` | Redis database number |
 
-The HTTP/WebSocket port is `8080` (set in `apps/api/cmd/server/main.go`). The SFU uses Google's public STUN server (`stun.l.google.com:19302`).
+The HTTP/WebSocket port is `8080` (set in `apps/api/cmd/server/main.go`). The SFU uses Google's public STUN server (`stun.l.google.com:19302`). Ports, Redis keys and deploying beyond localhost are covered in [docs/infra.md](docs/infra.md).
 
 ### Client server address
 
@@ -228,85 +251,19 @@ The phone and the computer must be on the same network.
 
 ## API reference
 
-All REST responses use the same envelope:
+The full reference is in **[docs/protocol.md](docs/protocol.md)**. In short:
 
-```json
-{ "statusCode": 201, "isSuccess": true, "message": "…", "data": { } }
-```
+- `POST /api/v1/meeting` creates a meeting and returns its 8-character `code`.
+- `ws://<host>:8080/ws/meetings/{code}` is the meeting socket. Messages are JSON `{ "type": "...", "data": { ... } }`, and the first one must be `meeting.join`.
 
-### REST
-
-#### `POST /api/v1/meeting`
-
-Creates a meeting.
-
-```json
-{
-  "statusCode": 201,
-  "isSuccess": true,
-  "message": "…",
-  "data": { "id": "b1f6…", "code": "3b270fce", "status": "…" }
-}
-```
-
-### WebSocket events
-
-Connect to `ws://<host>:8080/ws/meetings/{code}`. If the meeting doesn't exist, the server returns `404` before upgrading the connection.
-
-Every message is JSON shaped as `{ "type": "<event>", "data": { … } }`. **The first message must be `meeting.join`**, or the server closes the connection.
-
-#### Client → server
-
-| Type | Data | Description |
-| --- | --- | --- |
-| `meeting.join` | `{ "name": "Alice" }` | Join the meeting. Name is required, max 100 characters. |
-| `webrtc.offer` | `{ "type": "offer", "sdp": "…" }` | Start (or renegotiate) the media connection |
-| `webrtc.answer` | `{ "type": "answer", "sdp": "…" }` | Answer an offer from the server |
-| `webrtc.ice_candidate` | `{ "candidate": "…", "sdpMid": "0", "sdpMLineIndex": 0 }` | Local ICE candidate. Send only after your first offer. |
-| `chat.message` | any | Broadcast to everyone in the meeting |
-
-#### Server → client
-
-| Type | Data | Sent to |
-| --- | --- | --- |
-| `meeting.joined` | `{ "participant_id": "…", "name": "…" }` | The joining client (its own id) |
-| `meeting.already_exists_participants` | `[{ "participant_id": "…", "name": "…" }]` | The joining client |
-| `meeting.participant_joined` | `{ "participant_id": "…", "name": "…" }` | Everyone else |
-| `meeting.left` | `{ "participant_id": "…", "name": "…" }` | Everyone else when someone disconnects |
-| `webrtc.answer` | `{ "type": "answer", "sdp": "…" }` | Reply to the client's offer |
-| `webrtc.offer` | `{ "type": "offer", "sdp": "…" }` | Renegotiation when tracks are added or removed |
-| `webrtc.ice_candidate` | `{ "candidate": "…", "sdpMid": "…", "sdpMLineIndex": 0 }` | Server ICE candidates |
-| `chat.message` | as sent | Everyone, including the sender |
-| `error` | `{ "code": "…", "message": "…" }` | The client that caused it |
-
-Error codes include `INVALID_FIRST_EVENT`, `INVALID_JOIN_DATA`, `INVALID_NAME`, `INVALID_OFFER`, `INVALID_ANSWER`, `PEER_NOT_FOUND`, `INVALID_ICE_CANDIDATE` and `UNKNOWN_EVENT`.
-
-### Call flow
-
-```
-Client                                   Server (SFU)
-  │ ── WebSocket connect ───────────────────► │
-  │ ── meeting.join {name} ─────────────────► │
-  │ ◄─ meeting.joined {own id} ────────────── │
-  │ ◄─ meeting.already_exists_participants ── │
-  │                                           │ ──► others: meeting.participant_joined
-  │ ── webrtc.offer (mic + camera) ─────────► │
-  │ ◄─ webrtc.answer ──────────────────────── │
-  │ ◄─ webrtc.offer (existing participants' tracks)
-  │ ── webrtc.answer ───────────────────────► │
-  │ ◄──── webrtc.ice_candidate (both ways) ──► │
-  │                                           │
-  │   …later, someone joins or leaves…        │
-  │ ◄─ webrtc.offer (tracks added/removed) ── │
-  │ ── webrtc.answer ───────────────────────► │
-```
-
-Rules a client must follow:
-
-- Send your first `webrtc.offer` before any ICE candidates. The server rejects candidates for a peer that doesn't exist yet.
-- Remote ICE candidates can arrive **before** the answer. Queue them until a remote description is set.
-- Answer every `webrtc.offer` the server sends.
-- Find a remote track's owner from its stream id (or track id): the part before `:` is the participant id.
+| Area | Events |
+| --- | --- |
+| Meeting | `meeting.join`, `meeting.joined`, `meeting.already_exists_participants`, `meeting.participant_joined`, `meeting.left` |
+| Chat | `chat.message` |
+| Reactions | `meeting.reaction` |
+| Hand raise | `meeting.hand_raise` |
+| WebRTC signaling | `webrtc.offer`, `webrtc.answer`, `webrtc.ice_candidate` |
+| Errors | `error` (`{ "code", "message" }`) |
 
 ## Frontend architecture
 
@@ -359,7 +316,9 @@ Platform-specific pieces:
 ## Known limitations
 
 - **Mute and camera-off state isn't shared.** Turning your camera off sends black frames, and other people's tiles don't show you as muted.
-- **Chat, reactions, raised hands and screen sharing are UI-only** for now. The server already broadcasts `chat.message`, but the apps don't send or show it yet.
+- **Screen sharing is UI-only** for now.
+- **Video is VP8 only.** The SFU forwards packets without transcoding, so the server offers just VP8 and Opus to make sure every client can decode every stream. (The Android emulator's hardware H264 decoder can't render WebRTC video, and iOS prefers H264.)
+- **Chat has no history.** People who join late don't see earlier messages, and messages are gone once you leave.
 - **No TURN server**, so some network setups can't connect media.
 - **Single server instance.** The SFU state lives in memory, so it doesn't scale horizontally yet.
 - The CORS middleware allows every origin. It's meant for local development only.
