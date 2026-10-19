@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		7A1C0E2F2B3D4E5F60718293 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 7A1C0E2F2B3D4E5F60718294 /* WebRTC */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		F2F0977C41FD41CE511D1A40 /* Frontend.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Frontend.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -41,6 +45,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7A1C0E2F2B3D4E5F60718293 /* WebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -85,6 +90,7 @@
 			);
 			name = iosApp;
 			packageProductDependencies = (
+				7A1C0E2F2B3D4E5F60718294 /* WebRTC */,
 			);
 			productName = iosApp;
 			productReference = F2F0977C41FD41CE511D1A40 /* Frontend.app */;
@@ -114,6 +120,9 @@
 			);
 			mainGroup = 88DDB642DDCD05D4DC30C0F3;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7A1C0E2F2B3D4E5F60718295 /* XCLocalSwiftPackageReference "WebRTCPackage" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6EC66BB0E5740EFA684CD94A /* Products */;
 			projectDirPath = "";
@@ -368,6 +377,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		7A1C0E2F2B3D4E5F60718295 /* XCLocalSwiftPackageReference "WebRTCPackage" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = WebRTCPackage;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		7A1C0E2F2B3D4E5F60718294 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A1C0E2F2B3D4E5F60718295 /* XCLocalSwiftPackageReference "WebRTCPackage" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 239C8512352C274374F69A46 /* Project object */;
 }

@@ -30,3 +30,22 @@ data class ChatMessagePayloadDto(
     val name: String,
     val message: String,
 )
+
+@Serializable
+data class SdpDto(
+    val type: String,
+    val sdp: String,
+)
+
+@Serializable
+data class IceCandidateDto(
+    val candidate: String,
+    val sdpMid: String? = null,
+    val sdpMLineIndex: Int? = null,
+)
+
+@Serializable
+data class ErrorDto(
+    val code: String = "",
+    val message: String = "",
+)

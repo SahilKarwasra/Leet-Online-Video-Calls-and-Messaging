@@ -1,107 +1,88 @@
 package com.laarasoft.frontend.data.repository
 
-import com.laarasoft.frontend.data.datasource.KtorWebRtcDataSource
+import com.laarasoft.frontend.config.media.CallAudioSession
+import com.laarasoft.frontend.config.network.platformHttpLogger
 import com.laarasoft.frontend.data.datasource.MeetingSignal
 import com.laarasoft.frontend.data.datasource.MeetingSignaling
-import com.laarasoft.frontend.domain.models.Candidate
+import com.laarasoft.frontend.domain.datasource.WebRTCDataSource
+import com.laarasoft.frontend.domain.models.LocalMedia
 import com.laarasoft.frontend.domain.models.RtcEvent
 import com.laarasoft.frontend.domain.repository.MeetingRtcRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 
+// The server is an SFU: we send one offer with our tracks, it answers, and whenever
+// other participants publish/unpublish tracks it sends us a new offer to answer.
 class MeetingRtcRepositoryImpl(
-    private val rtc: KtorWebRtcDataSource,
-    private val signaling: MeetingSignaling
+    private val rtc: WebRTCDataSource,
+    private val signaling: MeetingSignaling,
+    private val audioSession: CallAudioSession,
 ) : MeetingRtcRepository {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var callScope: CoroutineScope? = null
 
     override val rtcEvents: Flow<RtcEvent> = rtc.events
 
-    init {
-        scope.launch {
+    override suspend fun startCall(): LocalMedia {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        callScope = scope
+        // The server rejects candidates that arrive before our first offer.
+        val offerSent = CompletableDeferred<Unit>()
+
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            signaling.incoming.collect { signal ->
+                try {
+                    handleSignal(signal)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    platformHttpLogger.log("[RTC] Failed to handle $signal: ${e.message}")
+                }
+            }
+        }
+
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
             rtc.localIceCandidates.collect { candidate ->
+                offerSent.await()
                 signaling.sendIceCandidate(candidate)
             }
         }
 
-        scope.launch {
-            signaling.incoming.collect { signal ->
-                when (signal) {
-                    is MeetingSignal.Offer -> {
-                        rtc.startLocalMedia()
-                        val answer = rtc.createAnswer(signal.sdp)
-                        signaling.sendAnswer(answer)
-                    }
+        audioSession.start()
+        val local = rtc.open()
+        signaling.sendOffer(rtc.createOffer())
+        offerSent.complete(Unit)
+        return local
+    }
 
-                    is MeetingSignal.Answer -> {
-                        rtc.setRemoteAnswer(signal.sdp)
-                    }
-
-                    is MeetingSignal.IceCandidate -> {
-                        rtc.addIceCandidate(signal.candidate)
-                    }
-
-                    is MeetingSignal.Failure -> {
-                    }
-                }
-            }
+    private suspend fun handleSignal(signal: MeetingSignal) {
+        when (signal) {
+            is MeetingSignal.Offer -> signaling.sendAnswer(rtc.createAnswer(signal.sdp))
+            is MeetingSignal.Answer -> rtc.setRemoteAnswer(signal.sdp)
+            is MeetingSignal.IceCandidate -> rtc.addIceCandidate(signal.candidate)
+            is MeetingSignal.Failure -> platformHttpLogger.log("[RTC] Server error ${signal.message}")
         }
     }
 
-    override suspend fun joinCall(
-        meetingCode: String,
-        participantId: String
-    ) {
-        rtc.createConnection()
-        rtc.startLocalMedia()
-        signaling.join(meetingCode, participantId)
+    override fun setMicrophoneEnabled(enabled: Boolean) {
+        rtc.setMicrophoneEnabled(enabled)
     }
 
-    override suspend fun handleRemoteOffer(sdp: String) {
-        rtc.startLocalMedia()
-        signaling.sendAnswer(rtc.createAnswer(sdp))
+    override fun setCameraEnabled(enabled: Boolean) {
+        rtc.setCameraEnabled(enabled)
     }
 
-    override suspend fun handleRemoteAnswer(sdp: String) {
-        rtc.setRemoteAnswer(sdp)
-    }
-
-    override suspend fun handleRemoteIceCandidate(
-        candidate: String,
-        sdpMid: String?,
-        sdpMLineIndex: Int?
-    ) {
-        rtc.addIceCandidate(
-            Candidate(
-                sdpCandidate = candidate,
-                sdpMid = sdpMid,
-                sdpMLineIndex = sdpMLineIndex
-            )
-        )
-    }
-
-//    override suspend fun setMicrophoneEnabled(enabled: Boolean) {
-//        rtc.setMicrophoneEnabled(enabled)
-//    }
-//
-//    override suspend fun setCameraEnabled(enabled: Boolean) {
-//        rtc.setCameraEnabled(enabled)
-//    }
-
-    override suspend fun leaveCall() {
-        signaling.leave()
+    override suspend fun endCall() {
+        callScope?.cancel()
+        callScope = null
         rtc.close()
-    }
-
-    fun dispose() {
-        scope.cancel()
-        signaling.disconnect()
-        rtc.dispose()
+        audioSession.stop()
     }
 }

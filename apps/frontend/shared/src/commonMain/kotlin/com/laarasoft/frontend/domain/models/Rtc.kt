@@ -1,5 +1,7 @@
 package com.laarasoft.frontend.domain.models
 
+import io.ktor.client.webrtc.WebRtcMedia
+
 data class RtcSessionDescription(
     val type: String,
     val sdp: String
@@ -20,10 +22,16 @@ enum class RtcConnectionState {
     CLOSED
 }
 
+// Tracks we publish. Either can be null if the device or permission is unavailable.
+data class LocalMedia(
+    val audioTrack: WebRtcMedia.AudioTrack?,
+    val videoTrack: WebRtcMedia.VideoTrack?,
+)
+
+// The SFU names forwarded tracks "<participantId>:<originalTrackId>".
 data class RemoteTrack(
-    val participantId: String?,
-    val trackId: String,
-    val kind: String
+    val participantId: String,
+    val track: WebRtcMedia.Track,
 )
 
 sealed interface RtcEvent {
@@ -36,7 +44,7 @@ sealed interface RtcEvent {
     ) : RtcEvent
 
     data class RemoteTrackRemoved(
-        val trackId: String
+        val track: RemoteTrack
     ) : RtcEvent
 
     data class Error(

@@ -65,7 +65,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -95,6 +94,8 @@ import com.laarasoft.frontend.domain.models.Participant
 import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.random.Random
+import com.laarasoft.frontend.presentation.componenet.RequestMediaPermissions
+import com.laarasoft.frontend.presentation.componenet.VideoContent
 import org.koin.compose.viewmodel.koinViewModel
 
 private val ReactionEmojis = listOf("👍", "👏", "❤️", "😂", "🎉", "😮")
@@ -113,16 +114,17 @@ fun MeetRoot(
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            viewModel.leaveMeeting()
-        }
-    }
+    RequestMediaPermissions(onFinished = { viewModel.onAction(MeetAction.StartCall) })
 
     MeetScreen(
         state = state,
         onAction = viewModel::onAction,
-        onNavigateBack = { viewModel.onAction(MeetAction.LeaveMeeting) }
+        onNavigateBack = { viewModel.onAction(MeetAction.LeaveMeeting) },
+        videoContent = { participant, modifier ->
+            state.videoTrackFor(participant)?.let { track ->
+                VideoContent(track = track, mirror = participant.isLocal, modifier = modifier)
+            }
+        }
     )
 }
 

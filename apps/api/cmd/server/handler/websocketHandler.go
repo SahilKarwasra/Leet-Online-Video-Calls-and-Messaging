@@ -428,6 +428,13 @@ func (handler *WebSocketHandler) handleWebRTCOffer(
 			SDP:  answerSDP,
 		},
 	})
+
+	// The answer can only reuse the m-lines in the client's offer, so with more
+	// than one existing participant some attached tracks are still unnegotiated.
+	// Send a follow-up offer so the client receives all of them.
+	if err := peer.Negotiate(); err != nil {
+		slog.Error("failed to renegotiate after answer", "error", err)
+	}
 }
 
 func (handler *WebSocketHandler) handleWebRTCAnswer(

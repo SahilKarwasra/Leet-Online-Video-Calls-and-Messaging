@@ -102,6 +102,13 @@ class KtorWsDataSourceImpl(
     }
 
 
+    override suspend fun send(event: MeetEventDto) {
+        val socket = checkNotNull(sessions) { "Meeting WebSocket is not connected" }
+        val text = json.encodeToString(event)
+        platformHttpLogger.log("[WS_OUTGOING] Sending: ${event.type}")
+        socket.send(Frame.Text(text))
+    }
+
     override suspend fun leave() {
         lifecycleMutex.withLock {
             val socket = sessions ?: return

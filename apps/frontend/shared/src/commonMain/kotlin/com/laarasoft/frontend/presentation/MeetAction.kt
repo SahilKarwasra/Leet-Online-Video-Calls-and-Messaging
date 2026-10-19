@@ -1,6 +1,7 @@
 package com.laarasoft.frontend.presentation
 
 sealed interface MeetAction {
+    data object StartCall : MeetAction
     data object LeaveMeeting : MeetAction
     data object ToggleMic : MeetAction
     data object ToggleCamera : MeetAction

@@ -1,7 +1,7 @@
 [versions]
 agp = "9.1.1"
 android-compileSdk = "37"
-android-minSdk = "24"
+android-minSdk = "28"
 android-targetSdk = "37"
 androidx-activity = "1.13.0"
 androidx-appcompat = "1.8.0"
@@ -26,6 +26,7 @@ datastore = "1.2.1"
 coil3-io = "3.6.3"
 ksp = "2.3.0"
 kotlin-wrappers = "2026.10.0"
+webrtcJava = "0.16.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -78,6 +79,7 @@ ktor-client-auth = { module = "io.ktor:ktor-client-auth", version.ref = "ktor"}
 ktor-client-websocket = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
 ktor-client-webrtc = { module = "io.ktor:ktor-client-webrtc", version.ref = "ktor" }
 ktor-client-content-encoding = { module = "io.ktor:ktor-client-encoding", version.ref = "ktor" }
+webrtc-java = { module = "dev.onvoid.webrtc:webrtc-java", version.ref = "webrtcJava" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

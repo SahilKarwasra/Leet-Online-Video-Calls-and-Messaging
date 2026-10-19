@@ -14,6 +14,18 @@ func SetupRouter(
 ) *gin.Engine {
 	engine := gin.Default()
 
+	// Lets the browser test client (apps/web-client) call the API from another port.
+	engine.Use(func(ctx *gin.Context) {
+		ctx.Header("Access-Control-Allow-Origin", "*")
+		ctx.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		ctx.Header("Access-Control-Allow-Headers", "Content-Type")
+		if ctx.Request.Method == http.MethodOptions {
+			ctx.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		ctx.Next()
+	})
+
 	engine.NoRoute(func(ctx *gin.Context) {
 		utils.NotFound(ctx, "route not found")
 	})
