@@ -31,7 +31,11 @@ func NewPeer(
 	participantID string,
 	meetingCode string,
 ) (*Peer, error) {
-	api := webrtc.NewAPI()
+	mediaEngine, err := newMediaEngine()
+	if err != nil {
+		return nil, fmt.Errorf("create media engine: %w", err)
+	}
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(mediaEngine))
 
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
@@ -71,6 +75,60 @@ func NewPeer(
 	})
 
 	return peer, nil
+}
+
+// The SFU forwards each publisher's packets as they are, so every subscriber
+// must be able to decode whatever codec a publisher picked. Offering only VP8
+// and Opus makes all clients publish the same codecs. Pion's defaults let iOS
+// publish H264, which the Android emulator's hardware decoder can't render.
+func newMediaEngine() (*webrtc.MediaEngine, error) {
+	videoFeedback := []webrtc.RTCPFeedback{
+		{Type: "goog-remb"},
+		{Type: "ccm", Parameter: "fir"},
+		{Type: "nack"},
+		{Type: "nack", Parameter: "pli"},
+	}
+	codecs := []struct {
+		params webrtc.RTPCodecParameters
+		kind   webrtc.RTPCodecType
+	}{
+		{
+			params: webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2,
+					SDPFmtpLine: "minptime=10;useinbandfec=1",
+				},
+				PayloadType: 111,
+			},
+			kind: webrtc.RTPCodecTypeAudio,
+		},
+		{
+			params: webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType: webrtc.MimeTypeVP8, ClockRate: 90000, RTCPFeedback: videoFeedback,
+				},
+				PayloadType: 96,
+			},
+			kind: webrtc.RTPCodecTypeVideo,
+		},
+		{
+			params: webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType: webrtc.MimeTypeRTX, ClockRate: 90000, SDPFmtpLine: "apt=96",
+				},
+				PayloadType: 97,
+			},
+			kind: webrtc.RTPCodecTypeVideo,
+		},
+	}
+
+	mediaEngine := &webrtc.MediaEngine{}
+	for _, codec := range codecs {
+		if err := mediaEngine.RegisterCodec(codec.params, codec.kind); err != nil {
+			return nil, err
+		}
+	}
+	return mediaEngine, nil
 }
 
 func (peer *Peer) SetRemoteOffer(sdp string) error {
