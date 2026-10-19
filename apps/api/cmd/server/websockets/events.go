@@ -9,7 +9,9 @@ const (
 	EventMeetingLeft               EventType = "meeting.left"
 	EventAlreadyExistsParticipants EventType = "meeting.already_exists_participants"
 
-	EventChatMessage EventType = "chat.message"
+	EventChatMessage EventType = "chat.message"       // client sends ChatMessagePayload, server broadcasts ChatMessageData
+	EventReaction    EventType = "meeting.reaction"   // client sends ReactionPayload, server broadcasts ReactionData
+	EventHandRaise   EventType = "meeting.hand_raise" // client sends HandRaisePayload, server broadcasts HandRaiseData
 	EventError       EventType = "error"
 
 	EventWebRTCOffer        EventType = "webrtc.offer"
@@ -34,6 +36,38 @@ type ParticipantJoinPayload struct {
 type ParticipantData struct {
 	Name          string `json:"name"`
 	ParticipantId string `json:"participant_id"`
+}
+
+type ChatMessagePayload struct {
+	Message string `json:"message"`
+}
+
+type ChatMessageData struct {
+	Id            string `json:"id"`
+	ParticipantId string `json:"participant_id"`
+	Name          string `json:"name"`
+	Message       string `json:"message"`
+	SentAt        int64  `json:"sent_at"` // unix milliseconds
+}
+
+type ReactionPayload struct {
+	Emoji string `json:"emoji"`
+}
+
+type ReactionData struct {
+	ParticipantId string `json:"participant_id"`
+	Name          string `json:"name"`
+	Emoji         string `json:"emoji"`
+}
+
+type HandRaisePayload struct {
+	Raised bool `json:"raised"`
+}
+
+type HandRaiseData struct {
+	ParticipantId string `json:"participant_id"`
+	Name          string `json:"name"`
+	Raised        bool   `json:"raised"`
 }
 
 type ErrorData struct {
