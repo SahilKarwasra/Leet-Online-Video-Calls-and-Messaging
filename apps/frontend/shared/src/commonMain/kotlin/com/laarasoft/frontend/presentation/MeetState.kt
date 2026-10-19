@@ -1,6 +1,7 @@
 package com.laarasoft.frontend.presentation
 
 import com.laarasoft.frontend.domain.models.Participant
+import io.ktor.client.webrtc.WebRtcMedia
 
 data class ChatMessage(
     val id: String,
@@ -27,4 +28,10 @@ data class MeetState(
     val panel: MeetPanel = MeetPanel.None,
     val unreadCount: Int = 0,
     val elapsed: String = "00:00",
-)
+    val localVideoTrack: WebRtcMedia.VideoTrack? = null,
+    // Keyed by participant id.
+    val remoteVideoTracks: Map<String, WebRtcMedia.VideoTrack> = emptyMap(),
+) {
+    fun videoTrackFor(participant: Participant): WebRtcMedia.VideoTrack? =
+        if (participant.isLocal) localVideoTrack else remoteVideoTracks[participant.id]
+}

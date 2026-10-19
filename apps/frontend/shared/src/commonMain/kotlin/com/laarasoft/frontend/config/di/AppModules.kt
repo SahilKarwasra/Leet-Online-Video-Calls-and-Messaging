@@ -3,13 +3,19 @@ package com.laarasoft.frontend.config.di
 import com.laarasoft.frontend.config.network.Endpoints
 import com.laarasoft.frontend.config.network.platformHttpLogger
 import com.laarasoft.frontend.data.datasource.HomeDataSourceImpl
+import com.laarasoft.frontend.data.datasource.KtorWebRtcDataSource
 import com.laarasoft.frontend.data.datasource.KtorWsDataSourceImpl
+import com.laarasoft.frontend.data.datasource.MeetingSignaling
+import com.laarasoft.frontend.data.datasource.WsMeetingSignaling
 import com.laarasoft.frontend.data.mapper.MeetingEventMapper
 import com.laarasoft.frontend.data.repository.HomeRepositoryImpl
+import com.laarasoft.frontend.data.repository.MeetingRtcRepositoryImpl
 import com.laarasoft.frontend.data.repository.WebSocketRepositoryImpl
 import com.laarasoft.frontend.domain.datasource.HomeDataSource
 import com.laarasoft.frontend.domain.datasource.KtorWsDataSource
+import com.laarasoft.frontend.domain.datasource.WebRTCDataSource
 import com.laarasoft.frontend.domain.repository.HomeRepository
+import com.laarasoft.frontend.domain.repository.MeetingRtcRepository
 import com.laarasoft.frontend.domain.repository.WebSocketRepository
 import com.laarasoft.frontend.presentation.HomeViewModel
 import com.laarasoft.frontend.presentation.MeetViewModel
@@ -30,6 +36,7 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 import org.koin.plugin.module.dsl.bind
 
+// Provides HttpClientEngine, WebRtcClient and CallAudioSession.
 expect val platformModule: Module
 
 val websocketModule: Module = module {
@@ -46,8 +53,16 @@ val websocketModule: Module = module {
     singleOf(::WebSocketRepositoryImpl).bind<WebSocketRepository>()
 }
 
+val rtcModule: Module = module {
+    single<MeetingSignaling> { WsMeetingSignaling(ws = get(), json = get()) }
+    single<WebRTCDataSource> { KtorWebRtcDataSource(client = get()) }
+    single<MeetingRtcRepository> {
+        MeetingRtcRepositoryImpl(rtc = get(), signaling = get(), audioSession = get())
+    }
+}
+
 val appModules = module {
-    includes(platformModule, websocketModule)
+    includes(platformModule, websocketModule, rtcModule)
     viewModelOf(::MeetViewModel)
 
     single<HttpClient> {

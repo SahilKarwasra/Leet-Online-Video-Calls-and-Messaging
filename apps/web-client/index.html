@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leet Web Test</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <section id="lobby">
+    <h1>Leet test client</h1>
+    <input id="name" placeholder="Your name" value="Web">
+    <input id="code" placeholder="Meeting code (leave empty to create)">
+    <button id="join">Join / Create</button>
+    <p id="status"></p>
+  </section>
+
+  <section id="call" hidden>
+    <p>Meeting code: <b id="meeting-code"></b></p>
+    <div id="grid"></div>
+    <div class="controls">
+      <button id="mic">Mute</button>
+      <button id="cam">Camera off</button>
+      <button id="leave" class="danger">Leave</button>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

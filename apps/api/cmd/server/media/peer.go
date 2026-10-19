@@ -245,11 +245,18 @@ func (peer *Peer) AddOutgoingTrack(
 		return nil
 	}
 
-	sender, err := peer.Connection.AddTrack(track)
+	// Always use a new send-only transceiver rather than AddTrack, which would reuse
+	// the client's own offered transceivers. Clients learn the "<participantId>:<id>"
+	// track id only from m-lines the server offers.
+	transceiver, err := peer.Connection.AddTransceiverFromTrack(
+		track,
+		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly},
+	)
 	if err != nil {
 		return fmt.Errorf("add outgoing track: %w", err)
 	}
 
+	sender := transceiver.Sender()
 	peer.senders[trackID] = sender
 
 	// Read RTCP from the subscriber and forward feedback (PLI, NACK, etc.)

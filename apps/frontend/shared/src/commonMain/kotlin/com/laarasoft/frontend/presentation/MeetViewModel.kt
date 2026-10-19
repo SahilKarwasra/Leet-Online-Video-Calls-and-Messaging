@@ -2,41 +2,119 @@ package com.laarasoft.frontend.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.laarasoft.frontend.domain.models.Participant
+import com.laarasoft.frontend.core.utils.ui.UiEvent
+import com.laarasoft.frontend.core.utils.ui.UiEventController
+import com.laarasoft.frontend.domain.models.RtcConnectionState
+import com.laarasoft.frontend.domain.models.RtcEvent
 import com.laarasoft.frontend.domain.models.MeetEvents as DomainMeetEvents
+import com.laarasoft.frontend.domain.repository.MeetingRtcRepository
 import com.laarasoft.frontend.domain.repository.WebSocketRepository
 import com.laarasoft.frontend.presentation.MeetEvents as UiMeetEvents
+import io.ktor.client.webrtc.WebRtcMedia
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
 
 class MeetViewModel(
-    private val wsRepository: WebSocketRepository
+    private val wsRepository: WebSocketRepository,
+    private val rtcRepository: MeetingRtcRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MeetState())
     val state = _state
+        .map { it.withMediaFlags() }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
             initialValue = _state.value
         )
 
+    private var startCallJob: Job? = null
+    private var hasLeft = false
+
     private val _events = Channel<UiMeetEvents>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
 
     init {
         observeWebSocketEvents()
+        observeRtcEvents()
         startTimer()
+    }
+
+    // Tile flags are derived from the actual media so they can't drift out of sync.
+    private fun MeetState.withMediaFlags() = copy(
+        participants = participants.map { participant ->
+            if (participant.isLocal) {
+                participant.copy(isMuted = !isMicOn, isVideoOn = isCameraOn && localVideoTrack != null)
+            } else {
+                participant.copy(isVideoOn = remoteVideoTracks.containsKey(participant.id))
+            }
+        }
+    )
+
+    private fun startCall() {
+        if (startCallJob != null || hasLeft) return
+        startCallJob = viewModelScope.launch {
+            try {
+                val local = rtcRepository.startCall()
+                rtcRepository.setMicrophoneEnabled(_state.value.isMicOn)
+                rtcRepository.setCameraEnabled(_state.value.isCameraOn)
+                _state.update {
+                    it.copy(
+                        localVideoTrack = local.videoTrack,
+                        isMicOn = it.isMicOn && local.audioTrack != null,
+                        isCameraOn = it.isCameraOn && local.videoTrack != null,
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                UiEventController.send(UiEvent.Snackbar(e.message ?: "Could not start the call"))
+            }
+        }
+    }
+
+    private fun observeRtcEvents() {
+        viewModelScope.launch {
+            rtcRepository.rtcEvents.collect { event ->
+                when (event) {
+                    is RtcEvent.RemoteTrackAdded -> {
+                        val track = event.track.track as? WebRtcMedia.VideoTrack ?: return@collect
+                        _state.update {
+                            it.copy(remoteVideoTracks = it.remoteVideoTracks + (event.track.participantId to track))
+                        }
+                    }
+
+                    is RtcEvent.RemoteTrackRemoved -> {
+                        _state.update {
+                            val current = it.remoteVideoTracks[event.track.participantId]
+                            if (current?.id != event.track.track.id) it
+                            else it.copy(remoteVideoTracks = it.remoteVideoTracks - event.track.participantId)
+                        }
+                    }
+
+                    is RtcEvent.ConnectionStateChanged -> {
+                        if (event.state == RtcConnectionState.FAILED) {
+                            UiEventController.send(UiEvent.Snackbar("Media connection lost"))
+                        }
+                    }
+
+                    is RtcEvent.Error -> UiEventController.send(UiEvent.Snackbar(event.message))
+                }
+            }
+        }
     }
 
     private fun observeWebSocketEvents() {
@@ -99,7 +177,8 @@ class MeetViewModel(
             is DomainMeetEvents.ParticipantLeft -> {
                 _state.update { state ->
                     state.copy(
-                        participants = state.participants.filterNot { it.id == event.participant.id }
+                        participants = state.participants.filterNot { it.id == event.participant.id },
+                        remoteVideoTracks = state.remoteVideoTracks - event.participant.id
                     )
                 }
             }
@@ -124,11 +203,14 @@ class MeetViewModel(
 
     fun onAction(action: MeetAction) {
         when (action) {
+            is MeetAction.StartCall -> startCall()
+
             is MeetAction.LeaveMeeting -> leaveMeeting()
 
             is MeetAction.ToggleMic -> {
                 _state.update { state ->
                     val newMic = !state.isMicOn
+                    rtcRepository.setMicrophoneEnabled(newMic)
                     state.copy(
                         isMicOn = newMic,
                         participants = state.participants.map {
@@ -141,6 +223,7 @@ class MeetViewModel(
             is MeetAction.ToggleCamera -> {
                 _state.update { state ->
                     val newCamera = !state.isCameraOn
+                    rtcRepository.setCameraEnabled(newCamera)
                     state.copy(
                         isCameraOn = newCamera,
                         participants = state.participants.map {
@@ -216,21 +299,33 @@ class MeetViewModel(
         }
     }
 
-    fun leaveMeeting() {
+    private fun leaveMeeting() {
         viewModelScope.launch {
-            try {
-                wsRepository.leave()
-            } catch (_: Exception) {}
+            endSession()
             _events.send(UiMeetEvents.NavigateBack)
         }
     }
 
+    private suspend fun endSession() {
+        if (hasLeft) return
+        hasLeft = true
+        startCallJob?.cancelAndJoin()
+        try {
+            rtcRepository.endCall()
+        } catch (_: Exception) {}
+        try {
+            wsRepository.leave()
+        } catch (_: Exception) {}
+    }
+
+    // Covers system back / navigation pops, which don't go through LeaveMeeting.
     override fun onCleared() {
         super.onCleared()
+        val pendingStart = startCallJob
+        startCallJob = null
         CoroutineScope(Dispatchers.Default).launch {
-            try {
-                wsRepository.leave()
-            } catch (_: Exception) {}
+            pendingStart?.join()
+            endSession()
         }
     }
 }
