@@ -24,11 +24,45 @@ data class JoinPayloadDto(
 )
 
 @Serializable
-data class ChatMessagePayloadDto(
+data class SendChatMessageDto(
+    val message: String,
+)
+
+@Serializable
+data class ChatMessageDto(
+    val id: String,
     @SerialName("participant_id")
     val participantId: String,
     val name: String,
     val message: String,
+    @SerialName("sent_at")
+    val sentAt: Long = 0,
+)
+
+@Serializable
+data class SendReactionDto(
+    val emoji: String,
+)
+
+@Serializable
+data class ReactionDto(
+    @SerialName("participant_id")
+    val participantId: String,
+    val name: String,
+    val emoji: String,
+)
+
+@Serializable
+data class SendHandRaiseDto(
+    val raised: Boolean,
+)
+
+@Serializable
+data class HandRaiseDto(
+    @SerialName("participant_id")
+    val participantId: String,
+    val name: String,
+    val raised: Boolean,
 )
 
 @Serializable

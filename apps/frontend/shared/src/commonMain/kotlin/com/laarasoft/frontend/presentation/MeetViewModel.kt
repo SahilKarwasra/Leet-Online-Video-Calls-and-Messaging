@@ -43,6 +43,7 @@ class MeetViewModel(
 
     private var startCallJob: Job? = null
     private var hasLeft = false
+    private var nextReactionId = 0L
 
     private val _events = Channel<UiMeetEvents>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
@@ -183,9 +184,51 @@ class MeetViewModel(
                 }
             }
 
-            is DomainMeetEvents.Failure -> {}
+            is DomainMeetEvents.ChatMessageReceived -> {
+                _state.update { state ->
+                    val localId = state.participants.find { it.isLocal }?.id
+                    val isMine = event.participantId == localId
+                    val message = ChatMessage(
+                        id = event.id,
+                        sender = event.name,
+                        text = event.text,
+                        isMine = isMine,
+                    )
+                    state.copy(
+                        messages = state.messages + message,
+                        unreadCount = if (isMine || state.panel == MeetPanel.Chat) state.unreadCount else state.unreadCount + 1
+                    )
+                }
+            }
+
+            is DomainMeetEvents.ReactionReceived -> addReaction(event.emoji, event.name)
+
+            is DomainMeetEvents.HandRaiseChanged -> {
+                _state.update { state ->
+                    state.copy(
+                        participants = state.participants.map {
+                            if (it.id == event.participantId) it.copy(isHandRaised = event.raised) else it
+                        }
+                    )
+                }
+                if (event.raised) {
+                    UiEventController.trySend(UiEvent.Snackbar("${event.name} raised their hand"))
+                }
+            }
+
+            is DomainMeetEvents.Failure -> {
+                // WebRTC errors are reported by the RTC repository.
+                if (event.code in setOf("INVALID_CHAT_MESSAGE", "INVALID_REACTION", "INVALID_HAND_RAISE")) {
+                    UiEventController.trySend(UiEvent.Snackbar(event.message))
+                }
+            }
             is DomainMeetEvents.Unknown -> {}
         }
+    }
+
+    private fun addReaction(emoji: String, sender: String) {
+        val reaction = FloatingReaction(id = nextReactionId++, emoji = emoji, sender = sender)
+        _state.update { it.copy(reactions = (it.reactions + reaction).takeLast(MAX_FLOATING_REACTIONS)) }
     }
 
     private fun startTimer() {
@@ -238,8 +281,8 @@ class MeetViewModel(
             }
 
             is MeetAction.ToggleHand -> {
+                val newHand = !_state.value.isHandRaised
                 _state.update { state ->
-                    val newHand = !state.isHandRaised
                     state.copy(
                         isHandRaised = newHand,
                         participants = state.participants.map {
@@ -247,30 +290,47 @@ class MeetViewModel(
                         }
                     )
                 }
+                viewModelScope.launch {
+                    try {
+                        wsRepository.sendHandRaise(newHand)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        UiEventController.send(UiEvent.Snackbar("Could not update raised hand"))
+                    }
+                }
             }
 
             is MeetAction.SendReaction -> {
-                val reaction = FloatingReaction(
-                    id = kotlin.time.Clock.System.now().toEpochMilliseconds(),
-                    emoji = action.emoji
-                )
-                _state.update { it.copy(reactions = it.reactions + reaction) }
+                addReaction(action.emoji, sender = "You")
+                viewModelScope.launch {
+                    try {
+                        wsRepository.sendReaction(action.emoji)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        UiEventController.send(UiEvent.Snackbar("Could not send reaction"))
+                    }
+                }
             }
 
             is MeetAction.DismissReaction -> {
                 _state.update { it.copy(reactions = it.reactions.filterNot { r -> r.id == action.id }) }
             }
 
+            // The server echoes the message back, which is when it gets added to the list.
             is MeetAction.SendMessage -> {
-                if (action.text.isNotBlank()) {
-                    val localName = _state.value.participants.find { it.isLocal }?.name ?: "You"
-                    val msg = ChatMessage(
-                        id = kotlin.time.Clock.System.now().toEpochMilliseconds().toString(),
-                        sender = localName,
-                        text = action.text.trim(),
-                        isMine = true
-                    )
-                    _state.update { it.copy(messages = it.messages + msg) }
+                val text = action.text.trim()
+                if (text.isNotEmpty()) {
+                    viewModelScope.launch {
+                        try {
+                            wsRepository.sendChatMessage(text)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            UiEventController.send(UiEvent.Snackbar("Message not sent"))
+                        }
+                    }
                 }
             }
 
@@ -327,5 +387,9 @@ class MeetViewModel(
             pendingStart?.join()
             endSession()
         }
+    }
+
+    private companion object {
+        const val MAX_FLOATING_REACTIONS = 30
     }
 }
