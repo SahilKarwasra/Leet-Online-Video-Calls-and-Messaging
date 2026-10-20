@@ -9,9 +9,10 @@ const (
 	EventMeetingLeft               EventType = "meeting.left"
 	EventAlreadyExistsParticipants EventType = "meeting.already_exists_participants"
 
-	EventChatMessage EventType = "chat.message"       // client sends ChatMessagePayload, server broadcasts ChatMessageData
-	EventReaction    EventType = "meeting.reaction"   // client sends ReactionPayload, server broadcasts ReactionData
-	EventHandRaise   EventType = "meeting.hand_raise" // client sends HandRaisePayload, server broadcasts HandRaiseData
+	EventChatMessage EventType = "chat.message"        // client sends ChatMessagePayload, server broadcasts ChatMessageData
+	EventReaction    EventType = "meeting.reaction"    // client sends ReactionPayload, server broadcasts ReactionData
+	EventHandRaise   EventType = "meeting.hand_raise"  // client sends HandRaisePayload, server broadcasts HandRaiseData
+	EventMediaState  EventType = "meeting.media_state" // client sends MediaStatePayload, server broadcasts MediaStateData
 	EventError       EventType = "error"
 
 	EventWebRTCOffer        EventType = "webrtc.offer"
@@ -68,6 +69,22 @@ type HandRaiseData struct {
 	ParticipantId string `json:"participant_id"`
 	Name          string `json:"name"`
 	Raised        bool   `json:"raised"`
+}
+
+// What a participant is sending. Video is off while the camera is off, even if
+// a black frame is still flowing; Screen means the video track is a screen.
+type MediaStatePayload struct {
+	Audio  bool `json:"audio"`
+	Video  bool `json:"video"`
+	Screen bool `json:"screen"`
+}
+
+type MediaStateData struct {
+	ParticipantId string `json:"participant_id"`
+	Name          string `json:"name"`
+	Audio         bool   `json:"audio"`
+	Video         bool   `json:"video"`
+	Screen        bool   `json:"screen"`
 }
 
 type ErrorData struct {

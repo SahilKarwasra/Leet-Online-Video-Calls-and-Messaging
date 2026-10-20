@@ -13,10 +13,10 @@ type Peer struct {
 	MeetingCode   string
 	Connection    *webrtc.PeerConnection
 
-	mu                 sync.Mutex
-	negotiationMu      sync.Mutex
-	renegotiateNeeded  bool
-	senders            map[string]*webrtc.RTPSender
+	mu                sync.Mutex
+	negotiationMu     sync.Mutex
+	renegotiateNeeded bool
+	senders           map[string]*webrtc.RTPSender
 
 	OnICECandidate func(webrtc.ICECandidateInit)
 	OnTrack        func(*webrtc.TrackRemote)
@@ -137,7 +137,19 @@ func (peer *Peer) SetRemoteOffer(sdp string) error {
 		SDP:  sdp,
 	}
 
-	if err := peer.Connection.SetRemoteDescription(offer); err != nil {
+	peer.negotiationMu.Lock()
+	if peer.Connection.SignalingState() == webrtc.SignalingStateHaveLocalOffer {
+		if err := peer.Connection.SetLocalDescription(
+			webrtc.SessionDescription{Type: webrtc.SDPTypeRollback},
+		); err != nil {
+			peer.negotiationMu.Unlock()
+			return fmt.Errorf("roll back local offer: %w", err)
+		}
+		peer.renegotiateNeeded = true
+	}
+	err := peer.Connection.SetRemoteDescription(offer)
+	peer.negotiationMu.Unlock()
+	if err != nil {
 		return fmt.Errorf("set remote offer: %w", err)
 	}
 
