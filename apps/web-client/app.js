@@ -10,7 +10,14 @@ let offerSent = false;
 let localCandidates = [];    // our ICE gathered before the offer went out
 let myId = null;
 let handRaised = false;
-const raisedHands = new Set(); // participantIds; a hand can arrive before that person's tile exists
+let micOn = true;
+let cameraWanted = true;          // what the user asked for; screen sharing doesn't change it
+let cameraTrack = null;           // released (stopped) while the camera is off
+let screenTrack = null;
+let videoSender = null;
+// Per tile: hand, audio, video, screen. State can arrive before the
+// person's tile exists, so it's kept here and applied when the tile is created.
+const tileState = {};
 const REACTIONS = ["👍", "👏", "❤️", "😂", "🎉", "😮"];
 
 $("join").onclick = async () => {
@@ -34,7 +41,8 @@ async function joinMeeting(code, name) {
     audio: true,
     video: { width: 640, height: 480 },
   });
-  addTile("local", "You", localStream, true);
+  cameraTrack = localStream.getVideoTracks()[0] || null;
+  addTile("local", "You", new MediaStream(localStream.getVideoTracks()), true);
 
   $("lobby").hidden = true;
   $("call").hidden = false;
@@ -65,7 +73,7 @@ async function handleEvent({ type, data }) {
       break;
     case "meeting.left":
       document.getElementById("tile-" + data.participant_id)?.remove();
-      raisedHands.delete(data.participant_id);
+      delete tileState[data.participant_id];
       break;
     case "chat.message":
       addMessage(data);
@@ -74,7 +82,10 @@ async function handleEvent({ type, data }) {
       floatReaction(data.emoji, data.name);
       break;
     case "meeting.hand_raise":
-      setTileHand(data.participant_id, data.raised);
+      updateTile(data.participant_id, { hand: data.raised });
+      break;
+    case "meeting.media_state":
+      updateTile(data.participant_id, { audio: data.audio, video: data.video, screen: data.screen });
       break;
     case "webrtc.offer":
       await pc.setRemoteDescription({ type: "offer", sdp: data.sdp });
@@ -98,7 +109,10 @@ async function handleEvent({ type, data }) {
 
 async function startCall() {
   pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-  localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+  localStream.getTracks().forEach((track) => {
+    const sender = pc.addTrack(track, localStream);
+    if (track.kind === "video") videoSender = sender;
+  });
 
   pc.onicecandidate = ({ candidate }) => {
     if (!candidate) return;
@@ -122,6 +136,63 @@ async function startCall() {
   offerSent = true;
   localCandidates.forEach((c) => send("webrtc.ice_candidate", c));
   localCandidates = [];
+  publishMediaState();
+}
+
+// Tell everyone what we're sending, so they show our avatar instead of a frozen frame.
+function publishMediaState() {
+  const state = { audio: micOn, video: !!cameraTrack && !screenTrack, screen: !!screenTrack };
+  if (ws?.readyState === WebSocket.OPEN) send("meeting.media_state", state);
+  updateTile("local", state);
+}
+
+// The camera is released when off (its light goes off) and reopened when on.
+async function setCamera(on) {
+  cameraWanted = on;
+  if (!screenTrack) {
+    if (on && !cameraTrack) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+      cameraTrack = stream.getVideoTracks()[0];
+      await videoSender?.replaceTrack(cameraTrack);
+      setLocalPreview(cameraTrack);
+    } else if (!on && cameraTrack) {
+      await videoSender?.replaceTrack(null);
+      cameraTrack.stop();
+      cameraTrack = null;
+    }
+  }
+  $("cam").textContent = cameraWanted ? "Camera off" : "Camera on";
+  publishMediaState();
+}
+
+async function startScreenShare() {
+  const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 } });
+  screenTrack = stream.getVideoTracks()[0];
+  screenTrack.onended = stopScreenShare; // the browser's own "Stop sharing" button
+  await videoSender?.replaceTrack(screenTrack);
+  cameraTrack?.stop();
+  cameraTrack = null;
+  $("share").textContent = "Stop presenting";
+  publishMediaState();
+}
+
+async function stopScreenShare() {
+  if (!screenTrack) return;
+  const track = screenTrack;
+  screenTrack = null;
+  track.stop();
+  $("share").textContent = "Share screen";
+  if (cameraWanted) {
+    await setCamera(true);
+  } else {
+    await videoSender?.replaceTrack(null);
+    publishMediaState();
+  }
+}
+
+function setLocalPreview(track) {
+  const video = document.querySelector("#tile-local video");
+  if (video) video.srcObject = new MediaStream(track ? [track] : []);
 }
 
 async function flushRemoteCandidates() {
@@ -140,23 +211,41 @@ function addTile(id, label, stream, isLocal) {
   video.muted = isLocal; // never play your own mic back
   video.srcObject = stream;
 
+  // Shown instead of the video while the camera is off.
+  const avatar = document.createElement("div");
+  avatar.className = "avatar";
+  avatar.textContent = initials(label);
+
   const name = document.createElement("span");
-  name.textContent = label;
+  name.dataset.label = label;
 
   const hand = document.createElement("b");
   hand.className = "hand";
   hand.textContent = "✋";
-  hand.hidden = !raisedHands.has(id);
 
-  tile.append(video, name, hand);
+  tile.append(video, avatar, name, hand);
   $("grid").append(tile);
+  renderTile(id);
 }
 
-function setTileHand(participantId, raised) {
-  if (raised) raisedHands.add(participantId);
-  else raisedHands.delete(participantId);
-  const hand = document.querySelector(`#tile-${participantId} .hand`);
-  if (hand) hand.hidden = !raised;
+function initials(name) {
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || "").join("") || "?";
+}
+
+function updateTile(id, changes) {
+  tileState[id] = { ...(tileState[id] || {}), ...changes };
+  renderTile(id);
+}
+
+function renderTile(id) {
+  const tile = document.getElementById("tile-" + id);
+  if (!tile) return;
+  const s = { audio: true, video: true, screen: false, hand: false, ...tileState[id] };
+  tile.classList.toggle("video-off", !s.video && !s.screen);
+  tile.classList.toggle("screen", s.screen);
+  tile.querySelector(".hand").hidden = !s.hand;
+  const name = tile.querySelector("span");
+  name.textContent = (s.audio ? "" : "🔇 ") + name.dataset.label + (s.screen ? " (presenting)" : "");
 }
 
 function addMessage({ participant_id, name, message }) {
@@ -199,7 +288,7 @@ REACTIONS.forEach((emoji) => {
 $("hand").onclick = () => {
   handRaised = !handRaised;
   send("meeting.hand_raise", { raised: handRaised });
-  setTileHand("local", handRaised);
+  updateTile("local", { hand: handRaised });
   $("hand").textContent = handRaised ? "Lower hand" : "Raise hand";
 };
 
@@ -210,20 +299,22 @@ $("copy").onclick = async () => {
 };
 
 $("mic").onclick = () => {
-  const track = localStream.getAudioTracks()[0];
-  track.enabled = !track.enabled;
-  $("mic").textContent = track.enabled ? "Mute" : "Unmute";
+  micOn = !micOn;
+  localStream.getAudioTracks().forEach((t) => (t.enabled = micOn));
+  $("mic").textContent = micOn ? "Mute" : "Unmute";
+  publishMediaState();
 };
 
-$("cam").onclick = () => {
-  const track = localStream.getVideoTracks()[0];
-  track.enabled = !track.enabled;
-  $("cam").textContent = track.enabled ? "Camera off" : "Camera on";
-};
+$("cam").onclick = () => setCamera(!cameraWanted).catch((e) => console.warn("Camera:", e));
+
+$("share").onclick = () =>
+  (screenTrack ? stopScreenShare() : startScreenShare()).catch((e) => console.warn("Share:", e));
 
 $("leave").onclick = () => {
   pc?.close();
   ws?.close();
   localStream?.getTracks().forEach((t) => t.stop());
+  cameraTrack?.stop();
+  screenTrack?.stop();
   location.reload();
 };

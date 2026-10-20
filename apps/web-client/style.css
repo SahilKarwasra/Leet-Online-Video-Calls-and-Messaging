@@ -52,6 +52,16 @@ button.small { display: inline; padding: 4px 10px; font-size: 13px; margin: 0 0 
 #chat-form button { margin: 0; }
 
 .tile .hand { position: absolute; top: 8px; right: 8px; font-size: 24px; }
+.tile .avatar {
+  display: none; position: absolute; inset: 0; margin: auto; width: 96px; height: 96px;
+  border-radius: 50%; background: #2d6cdf; color: white; font-size: 36px;
+  align-items: center; justify-content: center;
+}
+.tile.video-off video { visibility: hidden; }
+.tile.video-off .avatar { display: flex; }
+.tile.screen { background: #000; }
+.tile.screen video { object-fit: contain; }
+.tile.local.screen video { transform: none; }
 
 #floating { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
 .float { position: absolute; bottom: 80px; font-size: 28px; animation: float-up 2.8s ease-out forwards; }
