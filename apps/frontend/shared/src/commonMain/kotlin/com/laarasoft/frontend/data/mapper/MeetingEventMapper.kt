@@ -3,9 +3,11 @@ package com.laarasoft.frontend.data.mapper
 import com.laarasoft.frontend.data.dto.ChatMessageDto
 import com.laarasoft.frontend.data.dto.ErrorDto
 import com.laarasoft.frontend.data.dto.HandRaiseDto
+import com.laarasoft.frontend.data.dto.MediaStateDto
 import com.laarasoft.frontend.data.dto.MeetEventDto
 import com.laarasoft.frontend.data.dto.ParticipantDto
 import com.laarasoft.frontend.data.dto.ReactionDto
+import com.laarasoft.frontend.domain.models.MediaState
 import com.laarasoft.frontend.domain.models.MeetEvents
 import com.laarasoft.frontend.domain.models.Participant
 import kotlinx.serialization.json.Json
@@ -73,6 +75,14 @@ class MeetingEventMapper(
                     participantId = data.participantId,
                     name = data.name,
                     raised = data.raised,
+                )
+            }
+
+            "meeting.media_state" -> {
+                val data = json.decodeFromJsonElement<MediaStateDto>(events.data)
+                MeetEvents.MediaStateChanged(
+                    participantId = data.participantId,
+                    state = MediaState(audio = data.audio, video = data.video, screen = data.screen),
                 )
             }
 

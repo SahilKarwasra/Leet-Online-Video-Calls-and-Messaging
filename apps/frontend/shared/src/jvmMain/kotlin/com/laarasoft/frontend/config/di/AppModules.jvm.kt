@@ -2,6 +2,8 @@ package com.laarasoft.frontend.config.di
 
 import com.laarasoft.frontend.config.media.CallAudioSession
 import com.laarasoft.frontend.config.media.JvmCallAudioSession
+import com.laarasoft.frontend.config.media.JvmScreenCapturer
+import com.laarasoft.frontend.domain.datasource.ScreenCapturer
 import dev.onvoid.webrtc.media.MediaDevices
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
@@ -25,4 +27,5 @@ actual val platformModule: Module = module {
         WebRtcClient(JvmWebRtc) { mediaTrackFactory = devices }
     }
     single<CallAudioSession> { JvmCallAudioSession }
+    single<ScreenCapturer> { JvmScreenCapturer(get()) }
 }

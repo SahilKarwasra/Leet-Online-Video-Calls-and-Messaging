@@ -51,12 +51,15 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MicOff
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PanTool
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.ScreenShare
 import androidx.compose.material.icons.rounded.StopScreenShare
 import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material.icons.rounded.VideocamOff
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -91,6 +94,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.laarasoft.frontend.core.theme.LeetTheme
 import com.laarasoft.frontend.core.utils.ObserveAsEvents
@@ -99,7 +104,10 @@ import com.laarasoft.frontend.domain.models.Participant
 import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.random.Random
+import com.laarasoft.frontend.presentation.componenet.KeepScreenOn
+import com.laarasoft.frontend.presentation.componenet.PausesCameraInBackground
 import com.laarasoft.frontend.presentation.componenet.RequestMediaPermissions
+import com.laarasoft.frontend.presentation.componenet.rememberScreenShareLauncher
 import com.laarasoft.frontend.presentation.componenet.VideoContent
 import com.laarasoft.frontend.core.utils.ui.UiEvent
 import com.laarasoft.frontend.core.utils.ui.UiEventController
@@ -124,15 +132,33 @@ fun MeetRoot(
     }
 
     RequestMediaPermissions(onFinished = { viewModel.onAction(MeetAction.StartCall) })
+    KeepScreenOn()
+    if (PausesCameraInBackground) {
+        LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onAction(MeetAction.AppBackgrounded) }
+        LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onAction(MeetAction.AppForegrounded) }
+    }
+    val screenShare = rememberScreenShareLauncher(
+        onGranted = { viewModel.onAction(MeetAction.StartScreenShare(it)) }
+    )
 
     MeetScreen(
         state = state,
         meetCode = meetCode,
         onAction = viewModel::onAction,
         onNavigateBack = { viewModel.onAction(MeetAction.LeaveMeeting) },
+        canShareScreen = screenShare.isSupported,
+        onShareScreen = {
+            if (state.isScreenSharing) viewModel.onAction(MeetAction.StopScreenShare) else screenShare.launch()
+        },
         videoContent = { participant, modifier ->
             state.videoTrackFor(participant)?.let { track ->
-                VideoContent(track = track, mirror = participant.isLocal, modifier = modifier)
+                VideoContent(
+                    track = track,
+                    // Shared screens are shown whole and never mirrored.
+                    mirror = participant.isLocal && !participant.isScreenSharing,
+                    fit = participant.isScreenSharing,
+                    modifier = modifier
+                )
             }
         }
     )
@@ -145,6 +171,8 @@ fun MeetScreen(
     onAction: (MeetAction) -> Unit,
     meetCode: String = "",
     onNavigateBack: () -> Unit = {},
+    canShareScreen: Boolean = false,
+    onShareScreen: () -> Unit = {},
     videoContent: @Composable (Participant, Modifier) -> Unit = { _, _ -> }
 ) {
     var showReactions by remember { mutableStateOf(false) }
@@ -185,6 +213,14 @@ fun MeetScreen(
                             .weight(1f)
                             .fillMaxWidth()
                     )
+                    if (state.isScreenSharing) {
+                        PresentingBanner(
+                            onStop = onShareScreen,
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(top = 12.dp)
+                        )
+                    }
                     Spacer(Modifier.height(12.dp))
                     ControlBar(
                         state = state,
@@ -195,6 +231,8 @@ fun MeetScreen(
                             showMeetingReady = false
                             onAction(MeetAction.TogglePanel(MeetPanel.Info))
                         },
+                        canShareScreen = canShareScreen,
+                        onShareScreen = onShareScreen,
                         onAction = onAction,
                         onLeave = onNavigateBack,
                         modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -210,7 +248,8 @@ fun MeetScreen(
                 )
 
                 androidx.compose.animation.AnimatedVisibility(
-                    visible = showMeetingReady && meetCode.isNotBlank(),
+                    // Hidden while presenting so it doesn't cover the "Stop presenting" banner.
+                    visible = showMeetingReady && meetCode.isNotBlank() && !state.isScreenSharing,
                     enter = fadeIn() + slideInVertically { it / 3 },
                     exit = fadeOut() + slideOutVertically { it / 3 },
                     modifier = Modifier
@@ -327,6 +366,13 @@ private fun ParticipantGrid(
     videoContent: @Composable (Participant, Modifier) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Someone else's shared screen takes the stage; everyone else moves to a strip.
+    val presenter = participants.firstOrNull { it.isScreenSharing && it.isVideoOn && !it.isLocal }
+    if (presenter != null) {
+        PresentationLayout(presenter, participants - presenter, videoContent, modifier)
+        return
+    }
+
     val hasOverflow = participants.size > maxTiles
     val visible = if (hasOverflow) participants.take(maxTiles - 1) else participants
     val hidden = participants.size - visible.size
@@ -374,6 +420,48 @@ private fun ParticipantGrid(
     }
 }
 
+@Composable
+private fun PresentationLayout(
+    presenter: Participant,
+    others: List<Participant>,
+    videoContent: @Composable (Participant, Modifier) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BoxWithConstraints(modifier) {
+        val landscape = maxWidth > maxHeight
+        val stripSize = if (landscape) 200.dp else 120.dp
+        val maxInStrip = if (landscape) 4 else 3
+        val shown = if (others.size > maxInStrip) others.take(maxInStrip - 1) else others
+        val hidden = others.size - shown.size
+
+        @Composable
+        fun Strip(tileModifier: Modifier) {
+            shown.forEach { ParticipantTile(it, videoContent, tileModifier) }
+            if (hidden > 0) OverflowTile(hidden, tileModifier)
+        }
+
+        if (landscape) {
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ParticipantTile(presenter, videoContent, Modifier.weight(1f).fillMaxHeight())
+                if (others.isNotEmpty()) {
+                    Column(Modifier.width(stripSize).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Strip(Modifier.fillMaxWidth().height(stripSize * 0.75f))
+                    }
+                }
+            }
+        } else {
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ParticipantTile(presenter, videoContent, Modifier.weight(1f).fillMaxWidth())
+                if (others.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth().height(stripSize), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Strip(Modifier.weight(1f).fillMaxHeight())
+                    }
+                }
+            }
+        }
+    }
+}
+
 private fun gridColumns(count: Int, landscape: Boolean): Int = when {
     count <= 1 -> 1
     count == 2 -> if (landscape) 2 else 1
@@ -390,14 +478,15 @@ private fun ParticipantTile(
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(20.dp)
-    val speakingBorder = MaterialTheme.colorScheme.primary
-    val border by animateColorAsState(if (participant.isSpeaking) speakingBorder else Color.Transparent)
+
+    // A shared screen is letterboxed, so give it a neutral black background.
+    val background = if (participant.isScreenSharing && participant.isVideoOn) Color.Black
+    else MaterialTheme.colorScheme.surfaceContainer
 
     BoxWithConstraints(
         modifier
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .border(2.dp, border, shape)
+            .background(background)
     ) {
         if (participant.isVideoOn) {
             videoContent(participant, Modifier.fillMaxSize())
@@ -430,13 +519,13 @@ private fun ParticipantTile(
                 Spacer(Modifier.width(6.dp))
             }
             Text(
-                text = if (participant.isLocal) "You" else participant.name,
+                text = tileLabel(participant),
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 140.dp)
+                modifier = Modifier.widthIn(max = 180.dp)
             )
         }
 
@@ -457,6 +546,49 @@ private fun ParticipantTile(
                     modifier = Modifier.size(16.dp)
                 )
             }
+        }
+    }
+}
+
+private fun tileLabel(participant: Participant): String = when {
+    participant.isLocal && participant.isScreenSharing -> "You (presenting)"
+    participant.isLocal -> "You"
+    participant.isScreenSharing -> "${participant.name} is presenting"
+    else -> participant.name
+}
+
+@Composable
+private fun PresentingBanner(onStop: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(modifier, shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+        Row(
+            Modifier.padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Rounded.ScreenShare,
+                null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "You're presenting to everyone",
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "Stop presenting",
+                color = MaterialTheme.colorScheme.onPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable(role = Role.Button, onClick = onStop)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            )
         }
     }
 }
@@ -519,6 +651,8 @@ private fun ControlBar(
     reactionsOpen: Boolean,
     onToggleReactions: () -> Unit,
     onInfo: () -> Unit,
+    canShareScreen: Boolean,
+    onShareScreen: () -> Unit,
     onAction: (MeetAction) -> Unit,
     onLeave: () -> Unit,
     modifier: Modifier = Modifier
@@ -541,12 +675,12 @@ private fun ControlBar(
                 tone = if (state.isCameraOn) Tone.Neutral else Tone.Off,
                 onClick = { onAction(MeetAction.ToggleCamera) }
             )
-            if (isWide) {
+            if (isWide && canShareScreen) {
                 ControlButton(
                     icon = if (state.isScreenSharing) Icons.Rounded.StopScreenShare else Icons.Rounded.ScreenShare,
-                    description = "Share screen",
+                    description = if (state.isScreenSharing) "Stop presenting" else "Share screen",
                     tone = if (state.isScreenSharing) Tone.Active else Tone.Neutral,
-                    onClick = { onAction(MeetAction.ToggleScreenShare) }
+                    onClick = onShareScreen
                 )
             }
             ControlButton(
@@ -570,18 +704,70 @@ private fun ControlBar(
                     onClick = { onAction(MeetAction.TogglePanel(MeetPanel.People)) }
                 )
             }
-            ControlButton(
-                icon = Icons.Rounded.Info,
-                description = "Meeting details",
-                tone = if (state.panel == MeetPanel.Info) Tone.Active else Tone.Neutral,
-                onClick = onInfo
-            )
+            if (isWide) {
+                ControlButton(
+                    icon = Icons.Rounded.Info,
+                    description = "Meeting details",
+                    tone = if (state.panel == MeetPanel.Info) Tone.Active else Tone.Neutral,
+                    onClick = onInfo
+                )
+            } else {
+                // No room for more buttons on a phone; the rest go in a menu.
+                MoreMenu(
+                    active = state.panel == MeetPanel.Info || state.isScreenSharing,
+                    canShareScreen = canShareScreen,
+                    isScreenSharing = state.isScreenSharing,
+                    onShareScreen = onShareScreen,
+                    onInfo = onInfo
+                )
+            }
             ControlButton(
                 icon = Icons.Rounded.CallEnd,
                 description = "Leave",
                 tone = Tone.Leave,
                 width = 64.dp,
                 onClick = onLeave
+            )
+        }
+    }
+}
+
+@Composable
+private fun MoreMenu(
+    active: Boolean,
+    canShareScreen: Boolean,
+    isScreenSharing: Boolean,
+    onShareScreen: () -> Unit,
+    onInfo: () -> Unit
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ControlButton(
+            icon = Icons.Rounded.MoreVert,
+            description = "More options",
+            tone = if (open || active) Tone.Active else Tone.Neutral,
+            onClick = { open = true }
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (canShareScreen) {
+                DropdownMenuItem(
+                    text = { Text(if (isScreenSharing) "Stop presenting" else "Share screen") },
+                    leadingIcon = {
+                        Icon(if (isScreenSharing) Icons.Rounded.StopScreenShare else Icons.Rounded.ScreenShare, null)
+                    },
+                    onClick = {
+                        open = false
+                        onShareScreen()
+                    }
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("Meeting details") },
+                leadingIcon = { Icon(Icons.Rounded.Info, null) },
+                onClick = {
+                    open = false
+                    onInfo()
+                }
             )
         }
     }
@@ -1155,7 +1341,7 @@ private fun Preview() {
                 elapsed = "12:48",
                 participants = listOf(
                     Participant("1", "You", isLocal = true, isVideoOn = false),
-                    Participant("2", "Aisha Khan", isSpeaking = true),
+                    Participant("2", "Aisha Khan"),
                     Participant("3", "Marco Rossi", isMuted = true),
                     Participant("4", "Lena Fischer", isHandRaised = true),
                     Participant("5", "Ravi Patel"),

@@ -55,7 +55,7 @@ val websocketModule: Module = module {
 
 val rtcModule: Module = module {
     single<MeetingSignaling> { WsMeetingSignaling(ws = get(), json = get()) }
-    single<WebRTCDataSource> { KtorWebRtcDataSource(client = get()) }
+    single<WebRTCDataSource> { KtorWebRtcDataSource(client = get(), screenCapturer = get()) }
     single<MeetingRtcRepository> {
         MeetingRtcRepositoryImpl(rtc = get(), signaling = get(), audioSession = get())
     }

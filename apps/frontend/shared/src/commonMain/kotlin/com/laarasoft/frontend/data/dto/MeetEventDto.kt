@@ -66,6 +66,22 @@ data class HandRaiseDto(
 )
 
 @Serializable
+data class SendMediaStateDto(
+    val audio: Boolean,
+    val video: Boolean,
+    val screen: Boolean,
+)
+
+@Serializable
+data class MediaStateDto(
+    @SerialName("participant_id")
+    val participantId: String,
+    val audio: Boolean,
+    val video: Boolean,
+    val screen: Boolean = false,
+)
+
+@Serializable
 data class SdpDto(
     val type: String,
     val sdp: String,

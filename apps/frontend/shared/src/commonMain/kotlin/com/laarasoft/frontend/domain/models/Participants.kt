@@ -6,6 +6,6 @@ package com.laarasoft.frontend.domain.models
      val isLocal: Boolean = false,
      val isMuted: Boolean = false,
      val isVideoOn: Boolean = false,
-     val isSpeaking: Boolean = false,
      val isHandRaised: Boolean = false,
+     val isScreenSharing: Boolean = false,
  )

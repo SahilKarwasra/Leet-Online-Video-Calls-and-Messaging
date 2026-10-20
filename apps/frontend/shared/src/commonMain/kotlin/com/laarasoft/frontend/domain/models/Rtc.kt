@@ -47,7 +47,14 @@ sealed interface RtcEvent {
         val track: RemoteTrack
     ) : RtcEvent
 
+    data class LocalVideoChanged(
+        val track: WebRtcMedia.VideoTrack?
+    ) : RtcEvent
+    data object ScreenShareEnded : RtcEvent
+
     data class Error(
         val message: String
     ) : RtcEvent
 }
+
+interface ScreenCaptureGrant
