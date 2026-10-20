@@ -3,6 +3,7 @@ package websockets
 import (
 	"log"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -32,6 +33,28 @@ type Client struct {
 	lastReactionAt time.Time
 	// Read by other clients' goroutines when someone joins.
 	handRaised atomic.Bool
+
+	mediaMu    sync.Mutex
+	mediaState *MediaStatePayload // nil until the client reports it
+}
+
+func (client *Client) setMediaState(state MediaStatePayload) (changed bool) {
+	client.mediaMu.Lock()
+	defer client.mediaMu.Unlock()
+	if client.mediaState != nil && *client.mediaState == state {
+		return false
+	}
+	client.mediaState = &state
+	return true
+}
+
+func (client *Client) currentMediaState() (MediaStatePayload, bool) {
+	client.mediaMu.Lock()
+	defer client.mediaMu.Unlock()
+	if client.mediaState == nil {
+		return MediaStatePayload{}, false
+	}
+	return *client.mediaState, true
 }
 
 func (client *Client) ReadPump() {

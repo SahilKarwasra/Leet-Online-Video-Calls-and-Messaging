@@ -4,6 +4,10 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>LeetAppGroup</key>
+	<string>$(APP_GROUP_ID)</string>
+	<key>LeetScreenShareExtension</key>
+	<string>$(SCREEN_SHARE_EXTENSION_ID)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Leet needs camera access so others can see you in meetings.</string>
 	<key>NSMicrophoneUsageDescription</key>

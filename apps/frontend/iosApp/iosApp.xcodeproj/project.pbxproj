@@ -7,24 +7,67 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B10C0A010000000000000002 /* LeetScreenShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10C0A010000000000000001 /* LeetScreenShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		7A1C0E2F2B3D4E5F60718293 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 7A1C0E2F2B3D4E5F60718294 /* WebRTC */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		B10C0A010000000000000004 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 239C8512352C274374F69A46 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B10C0A010000000000000008;
+			remoteInfo = LeetScreenShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B10C0A010000000000000003 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B10C0A010000000000000002 /* LeetScreenShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		B10C0A010000000000000001 /* LeetScreenShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LeetScreenShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2F0977C41FD41CE511D1A40 /* Frontend.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Frontend.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B10C0A010000000000000007 /* Exceptions for "LeetScreenShare" folder in "LeetScreenShare" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				LeetScreenShare.entitlements,
+			);
+			target = B10C0A010000000000000008 /* LeetScreenShare */;
+		};
 		57EBFF105B72B9A059B4887E /* Exceptions for "iosApp" folder in "iosApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				iosApp.entitlements,
 			);
 			target = 5E426D4B2616B984E565CBB6 /* iosApp */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		B10C0A010000000000000006 /* LeetScreenShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B10C0A010000000000000007 /* Exceptions for "LeetScreenShare" folder in "LeetScreenShare" target */,
+			);
+			path = LeetScreenShare;
+			sourceTree = "<group>";
+		};
 		F98445B3D2457303396D82AB /* iosApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -41,6 +84,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		B10C0A01000000000000000A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CED4B882197B876329C49B51 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -57,6 +107,7 @@
 			children = (
 				19B687B2E9B32F4511E948CF /* Configuration */,
 				F98445B3D2457303396D82AB /* iosApp */,
+				B10C0A010000000000000006 /* LeetScreenShare */,
 				6EC66BB0E5740EFA684CD94A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -65,6 +116,7 @@
 			isa = PBXGroup;
 			children = (
 				F2F0977C41FD41CE511D1A40 /* Frontend.app */,
+				B10C0A010000000000000001 /* LeetScreenShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -72,6 +124,26 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		B10C0A010000000000000008 /* LeetScreenShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B10C0A01000000000000000C /* Build configuration list for PBXNativeTarget "LeetScreenShare" */;
+			buildPhases = (
+				B10C0A010000000000000009 /* Sources */,
+				B10C0A01000000000000000A /* Frameworks */,
+				B10C0A01000000000000000B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B10C0A010000000000000006 /* LeetScreenShare */,
+			);
+			name = LeetScreenShare;
+			productName = LeetScreenShare;
+			productReference = B10C0A010000000000000001 /* LeetScreenShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		5E426D4B2616B984E565CBB6 /* iosApp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 14F35A2D3225FF7E1D216A5D /* Build configuration list for PBXNativeTarget "iosApp" */;
@@ -80,10 +152,12 @@
 				BB5DE3FACCDE94404AD4FFEF /* Sources */,
 				CED4B882197B876329C49B51 /* Frameworks */,
 				44C1677B1C132DE31FA3D2AD /* Resources */,
+				B10C0A010000000000000003 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B10C0A010000000000000005 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F98445B3D2457303396D82AB /* iosApp */,
@@ -109,6 +183,9 @@
 					5E426D4B2616B984E565CBB6 = {
 						CreatedOnToolsVersion = 16.2;
 					};
+					B10C0A010000000000000008 = {
+						CreatedOnToolsVersion = 16.2;
+					};
 				};
 			};
 			buildConfigurationList = 5DD944FAD88210EB33E18A46 /* Build configuration list for PBXProject "iosApp" */;
@@ -129,11 +206,19 @@
 			projectRoot = "";
 			targets = (
 				5E426D4B2616B984E565CBB6 /* iosApp */,
+				B10C0A010000000000000008 /* LeetScreenShare */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		B10C0A01000000000000000B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		44C1677B1C132DE31FA3D2AD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -166,6 +251,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		B10C0A010000000000000009 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BB5DE3FACCDE94404AD4FFEF /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -175,7 +267,63 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		B10C0A010000000000000005 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B10C0A010000000000000008 /* LeetScreenShare */;
+			targetProxy = B10C0A010000000000000004 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		B10C0A01000000000000000D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LeetScreenShare/LeetScreenShare.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "${TEAM_ID}";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LeetScreenShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Leet;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SCREEN_SHARE_EXTENSION_ID)";
+				PRODUCT_NAME = LeetScreenShare;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B10C0A01000000000000000E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LeetScreenShare/LeetScreenShare.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "${TEAM_ID}";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LeetScreenShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Leet;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SCREEN_SHARE_EXTENSION_ID)";
+				PRODUCT_NAME = LeetScreenShare;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		3C2951632834EC914DAEF23C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = 19B687B2E9B32F4511E948CF /* Configuration */;
@@ -305,6 +453,7 @@
 				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = iosApp/iosApp.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"iosApp/Preview Content\"";
@@ -333,6 +482,7 @@
 				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = iosApp/iosApp.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"iosApp/Preview Content\"";
@@ -358,6 +508,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		B10C0A01000000000000000C /* Build configuration list for PBXNativeTarget "LeetScreenShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10C0A01000000000000000D /* Debug */,
+				B10C0A01000000000000000E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		5DD944FAD88210EB33E18A46 /* Build configuration list for PBXProject "iosApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

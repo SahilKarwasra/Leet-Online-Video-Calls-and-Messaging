@@ -11,10 +11,11 @@ object AndroidEgl {
     val base: EglBase by lazy { EglBase.create() }
 }
 
-class AndroidCallAudioSession(context: Context) : CallAudioSession {
+class AndroidCallAudioSession(private val context: Context) : CallAudioSession {
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
     override fun start() {
+        CallForegroundService.startCall(context)
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             audioManager.availableCommunicationDevices
@@ -34,5 +35,6 @@ class AndroidCallAudioSession(context: Context) : CallAudioSession {
             audioManager.isSpeakerphoneOn = false
         }
         audioManager.mode = AudioManager.MODE_NORMAL
+        CallForegroundService.endCall(context)
     }
 }

@@ -29,6 +29,7 @@ actual fun VideoContent(
     track: WebRtcMedia.VideoTrack,
     mirror: Boolean,
     modifier: Modifier,
+    fit: Boolean,
 ) {
     var bitmap by remember(track) { mutableStateOf<ImageBitmap?>(null) }
 
@@ -56,7 +57,7 @@ actual fun VideoContent(
             Image(
                 bitmap = it,
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
+                contentScale = if (fit) ContentScale.Fit else ContentScale.Crop,
                 modifier = Modifier.matchParentSize().scale(scaleX = if (mirror) -1f else 1f, scaleY = 1f),
             )
         }

@@ -1,5 +1,6 @@
 package com.laarasoft.frontend.presentation
 
+import com.laarasoft.frontend.domain.models.MediaState
 import com.laarasoft.frontend.domain.models.Participant
 import io.ktor.client.webrtc.WebRtcMedia
 
@@ -29,9 +30,14 @@ data class MeetState(
     val panel: MeetPanel = MeetPanel.None,
     val unreadCount: Int = 0,
     val elapsed: String = "00:00",
+    // What we are sending right now: the camera, a screen capture, or nothing.
     val localVideoTrack: WebRtcMedia.VideoTrack? = null,
     // Keyed by participant id.
     val remoteVideoTracks: Map<String, WebRtcMedia.VideoTrack> = emptyMap(),
+    // What each remote participant says they are sending, keyed by participant id.
+    val remoteMedia: Map<String, MediaState> = emptyMap(),
+    // Camera paused because the app is in the background (mobile only).
+    val isInBackground: Boolean = false,
 ) {
     fun videoTrackFor(participant: Participant): WebRtcMedia.VideoTrack? =
         if (participant.isLocal) localVideoTrack else remoteVideoTracks[participant.id]

@@ -19,10 +19,10 @@ actual fun VideoContent(
     track: WebRtcMedia.VideoTrack,
     mirror: Boolean,
     modifier: Modifier,
+    fit: Boolean,
 ) {
     val view = remember {
         RTCMTLVideoView(frame = CGRectMake(0.0, 0.0, 0.0, 0.0)).apply {
-            videoContentMode = UIViewContentMode.UIViewContentModeScaleAspectFill
             clipsToBounds = true
         }
     }
@@ -33,7 +33,11 @@ actual fun VideoContent(
     }
     UIKitView(
         factory = { view },
-        update = { it.transform = CGAffineTransformMakeScale(if (mirror) -1.0 else 1.0, 1.0) },
+        update = {
+            it.transform = CGAffineTransformMakeScale(if (mirror) -1.0 else 1.0, 1.0)
+            it.videoContentMode = if (fit) UIViewContentMode.UIViewContentModeScaleAspectFit
+            else UIViewContentMode.UIViewContentModeScaleAspectFill
+        },
         modifier = modifier,
     )
 }

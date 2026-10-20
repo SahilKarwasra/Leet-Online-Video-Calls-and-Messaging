@@ -129,6 +129,8 @@ func (hub *Hub) HandleEvent(client *Client, event Event) {
 		hub.handleReaction(client, event)
 	case EventHandRaise:
 		hub.handleHandRaise(client, event)
+	case EventMediaState:
+		hub.handleMediaState(client, event)
 	default:
 		hub.sendError(client, "UNKNOWN_EVENT", "unknown event type")
 	}
@@ -224,23 +226,55 @@ func (hub *Hub) handleHandRaise(client *Client, event Event) {
 	)
 }
 
-// SendRaisedHands tells a newly joined client whose hands are already up.
-func (hub *Hub) SendRaisedHands(client *Client) {
+func (hub *Hub) handleMediaState(client *Client, event Event) {
+	var payload MediaStatePayload
+	if err := decodeData(event.Data, &payload); err != nil {
+		hub.sendError(client, "INVALID_MEDIA_STATE", "invalid media state")
+		return
+	}
+	if !client.setMediaState(payload) {
+		return
+	}
+
+	hub.Broadcast(
+		client.MeetingId,
+		Event{Type: EventMediaState, Data: mediaStateData(client, payload)},
+		client,
+	)
+}
+
+func mediaStateData(client *Client, state MediaStatePayload) MediaStateData {
+	return MediaStateData{
+		ParticipantId: client.Id,
+		Name:          client.Name,
+		Audio:         state.Audio,
+		Video:         state.Video,
+		Screen:        state.Screen,
+	}
+}
+
+func (hub *Hub) SendParticipantStates(client *Client) {
+	var events []Event
+
 	hub.mu.RLock()
-	var raised []HandRaiseData
 	for other := range hub.clients[client.MeetingId] {
-		if other != client && other.handRaised.Load() {
-			raised = append(raised, HandRaiseData{
-				ParticipantId: other.Id,
-				Name:          other.Name,
-				Raised:        true,
+		if other == client {
+			continue
+		}
+		if other.handRaised.Load() {
+			events = append(events, Event{
+				Type: EventHandRaise,
+				Data: HandRaiseData{ParticipantId: other.Id, Name: other.Name, Raised: true},
 			})
+		}
+		if state, ok := other.currentMediaState(); ok {
+			events = append(events, Event{Type: EventMediaState, Data: mediaStateData(other, state)})
 		}
 	}
 	hub.mu.RUnlock()
 
-	for _, data := range raised {
-		hub.Send(client, Event{Type: EventHandRaise, Data: data})
+	for _, event := range events {
+		hub.Send(client, event)
 	}
 }
 

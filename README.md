@@ -4,6 +4,8 @@ Leet is a group video-calling app. A Go backend acts as a **WebRTC SFU** (Select
 
 Create a meeting, share the 8-character code, and everyone who joins sees and hears each other.
 
+![A Leet video call with several participants](pic.jpeg)
+
 ---
 
 ## Table of contents

@@ -28,6 +28,11 @@ sealed interface MeetEvents {
         val raised: Boolean,
     ) : MeetEvents
 
+    data class MediaStateChanged(
+        val participantId: String,
+        val state: MediaState,
+    ) : MeetEvents
+
     data class Failure(val code: String, val message: String) : MeetEvents
 
     data class Unknown(val type: String) : MeetEvents

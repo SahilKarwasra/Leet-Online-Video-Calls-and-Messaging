@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.laarasoft.frontend.core.utils.ui.UiEvent
 import com.laarasoft.frontend.core.utils.ui.UiEventController
+import com.laarasoft.frontend.domain.models.MediaState
 import com.laarasoft.frontend.domain.models.RtcConnectionState
 import com.laarasoft.frontend.domain.models.RtcEvent
 import com.laarasoft.frontend.domain.models.MeetEvents as DomainMeetEvents
@@ -26,6 +27,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class MeetViewModel(
     private val wsRepository: WebSocketRepository,
@@ -44,6 +47,9 @@ class MeetViewModel(
     private var startCallJob: Job? = null
     private var hasLeft = false
     private var nextReactionId = 0L
+    private val mediaChanges = Mutex()
+    private val publishing = Mutex()
+    private var sentMediaState: MediaState? = null
 
     private val _events = Channel<UiMeetEvents>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
@@ -53,17 +59,58 @@ class MeetViewModel(
         observeRtcEvents()
         startTimer()
     }
-
-    // Tile flags are derived from the actual media so they can't drift out of sync.
     private fun MeetState.withMediaFlags() = copy(
         participants = participants.map { participant ->
             if (participant.isLocal) {
-                participant.copy(isMuted = !isMicOn, isVideoOn = isCameraOn && localVideoTrack != null)
+                participant.copy(
+                    isMuted = !isMicOn,
+                    isVideoOn = localVideoTrack != null && !isScreenSharing,
+                    isScreenSharing = isScreenSharing,
+                )
             } else {
-                participant.copy(isVideoOn = remoteVideoTracks.containsKey(participant.id))
+                val media = remoteMedia[participant.id]
+                val hasTrack = remoteVideoTracks.containsKey(participant.id)
+                participant.copy(
+                    isVideoOn = hasTrack && (media == null || media.video || media.screen),
+                    isMuted = media?.audio == false,
+                    isScreenSharing = hasTrack && media?.screen == true,
+                )
             }
         }
     )
+
+    private suspend fun publishMediaState() = publishing.withLock {
+        val state = _state.value
+        val media = MediaState(
+            audio = state.isMicOn,
+            video = state.localVideoTrack != null && !state.isScreenSharing,
+            screen = state.localVideoTrack != null && state.isScreenSharing,
+        )
+        if (media == sentMediaState) return@withLock
+        try {
+            wsRepository.sendMediaState(media)
+            sentMediaState = media
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Socket closed; the next change or rejoin resends it.
+        }
+    }
+
+    private fun changeMedia(failureMessage: String, block: suspend () -> Unit) {
+        viewModelScope.launch {
+            mediaChanges.withLock {
+                try {
+                    block()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    UiEventController.send(UiEvent.Snackbar(e.message?.let { "$failureMessage: $it" } ?: failureMessage))
+                }
+            }
+            publishMediaState()
+        }
+    }
 
     private fun startCall() {
         if (startCallJob != null || hasLeft) return
@@ -71,7 +118,6 @@ class MeetViewModel(
             try {
                 val local = rtcRepository.startCall()
                 rtcRepository.setMicrophoneEnabled(_state.value.isMicOn)
-                rtcRepository.setCameraEnabled(_state.value.isCameraOn)
                 _state.update {
                     it.copy(
                         localVideoTrack = local.videoTrack,
@@ -79,6 +125,11 @@ class MeetViewModel(
                         isCameraOn = it.isCameraOn && local.videoTrack != null,
                     )
                 }
+                mediaChanges.withLock {
+                    val state = _state.value
+                    if (!state.isCameraOn || state.isInBackground) rtcRepository.setCameraEnabled(false)
+                }
+                publishMediaState()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -110,6 +161,16 @@ class MeetViewModel(
                         if (event.state == RtcConnectionState.FAILED) {
                             UiEventController.send(UiEvent.Snackbar("Media connection lost"))
                         }
+                    }
+
+                    is RtcEvent.LocalVideoChanged -> {
+                        _state.update { it.copy(localVideoTrack = event.track) }
+                        publishMediaState()
+                    }
+
+                    is RtcEvent.ScreenShareEnded -> {
+                        _state.update { it.copy(isScreenSharing = false) }
+                        publishMediaState()
                     }
 
                     is RtcEvent.Error -> UiEventController.send(UiEvent.Snackbar(event.message))
@@ -179,9 +240,14 @@ class MeetViewModel(
                 _state.update { state ->
                     state.copy(
                         participants = state.participants.filterNot { it.id == event.participant.id },
-                        remoteVideoTracks = state.remoteVideoTracks - event.participant.id
+                        remoteVideoTracks = state.remoteVideoTracks - event.participant.id,
+                        remoteMedia = state.remoteMedia - event.participant.id,
                     )
                 }
+            }
+
+            is DomainMeetEvents.MediaStateChanged -> {
+                _state.update { it.copy(remoteMedia = it.remoteMedia + (event.participantId to event.state)) }
             }
 
             is DomainMeetEvents.ChatMessageReceived -> {
@@ -251,33 +317,55 @@ class MeetViewModel(
             is MeetAction.LeaveMeeting -> leaveMeeting()
 
             is MeetAction.ToggleMic -> {
-                _state.update { state ->
-                    val newMic = !state.isMicOn
-                    rtcRepository.setMicrophoneEnabled(newMic)
-                    state.copy(
-                        isMicOn = newMic,
-                        participants = state.participants.map {
-                            if (it.isLocal) it.copy(isMuted = !newMic) else it
-                        }
-                    )
-                }
+                val newMic = !_state.value.isMicOn
+                rtcRepository.setMicrophoneEnabled(newMic)
+                _state.update { it.copy(isMicOn = newMic) }
+                changeMedia("Could not change microphone") {}
             }
 
             is MeetAction.ToggleCamera -> {
-                _state.update { state ->
-                    val newCamera = !state.isCameraOn
-                    rtcRepository.setCameraEnabled(newCamera)
-                    state.copy(
-                        isCameraOn = newCamera,
-                        participants = state.participants.map {
-                            if (it.isLocal) it.copy(isVideoOn = newCamera) else it
-                        }
-                    )
+                val newCamera = !_state.value.isCameraOn
+                _state.update { it.copy(isCameraOn = newCamera) }
+                changeMedia("Could not change camera") {
+                    if (!_state.value.isInBackground) rtcRepository.setCameraEnabled(newCamera)
                 }
             }
 
-            is MeetAction.ToggleScreenShare -> {
-                _state.update { it.copy(isScreenSharing = !it.isScreenSharing) }
+            // The flag flips before the track swap, so the state published when
+            // the new track arrives already says "screen".
+            is MeetAction.StartScreenShare -> {
+                changeMedia("Could not share your screen") {
+                    _state.update { it.copy(isScreenSharing = true) }
+                    try {
+                        rtcRepository.startScreenShare(action.grant)
+                    } catch (e: Exception) {
+                        _state.update { it.copy(isScreenSharing = false) }
+                        throw e
+                    }
+                }
+            }
+
+            is MeetAction.StopScreenShare -> {
+                changeMedia("Could not stop sharing") {
+                    _state.update { it.copy(isScreenSharing = false) }
+                    rtcRepository.stopScreenShare()
+                }
+            }
+
+            is MeetAction.AppBackgrounded -> {
+                _state.update { it.copy(isInBackground = true) }
+                changeMedia("Could not pause camera") {
+                    if (startCallJob?.isCompleted == true) rtcRepository.setCameraEnabled(false)
+                }
+            }
+
+            is MeetAction.AppForegrounded -> {
+                _state.update { it.copy(isInBackground = false) }
+                changeMedia("Could not resume camera") {
+                    if (startCallJob?.isCompleted == true && _state.value.isCameraOn) {
+                        rtcRepository.setCameraEnabled(true)
+                    }
+                }
             }
 
             is MeetAction.ToggleHand -> {

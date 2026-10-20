@@ -3,5 +3,11 @@ TEAM_ID=
 PRODUCT_NAME=Frontend
 PRODUCT_BUNDLE_IDENTIFIER=com.laarasoft.frontend.Frontend$(TEAM_ID)
 
+// Screen sharing: the app and its broadcast extension share frames through this
+// App Group. Enable the App Groups capability for both IDs in your Apple
+// developer account (Xcode does this when signing with your team).
+APP_GROUP_ID=group.com.laarasoft.frontend.Frontend$(TEAM_ID)
+SCREEN_SHARE_EXTENSION_ID=com.laarasoft.frontend.Frontend$(TEAM_ID).ScreenShare
+
 CURRENT_PROJECT_VERSION=1
 MARKETING_VERSION=1.0

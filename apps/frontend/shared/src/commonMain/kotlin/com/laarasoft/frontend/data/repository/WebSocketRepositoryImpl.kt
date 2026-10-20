@@ -3,9 +3,11 @@ package com.laarasoft.frontend.data.repository
 import com.laarasoft.frontend.data.dto.MeetEventDto
 import com.laarasoft.frontend.data.dto.SendChatMessageDto
 import com.laarasoft.frontend.data.dto.SendHandRaiseDto
+import com.laarasoft.frontend.data.dto.SendMediaStateDto
 import com.laarasoft.frontend.data.dto.SendReactionDto
 import com.laarasoft.frontend.data.mapper.MeetingEventMapper
 import com.laarasoft.frontend.domain.datasource.KtorWsDataSource
+import com.laarasoft.frontend.domain.models.MediaState
 import com.laarasoft.frontend.domain.models.MeetEvents
 import com.laarasoft.frontend.domain.repository.WebSocketRepository
 import kotlinx.coroutines.flow.Flow
@@ -41,6 +43,15 @@ class WebSocketRepositoryImpl(
     override suspend fun sendHandRaise(raised: Boolean) {
         dataSource.send(
             MeetEventDto(type = "meeting.hand_raise", data = json.encodeToJsonElement(SendHandRaiseDto(raised)))
+        )
+    }
+
+    override suspend fun sendMediaState(state: MediaState) {
+        dataSource.send(
+            MeetEventDto(
+                type = "meeting.media_state",
+                data = json.encodeToJsonElement(SendMediaStateDto(state.audio, state.video, state.screen))
+            )
         )
     }
 
